@@ -1,4 +1,5 @@
 import React from 'react';
+import { User } from 'lucide-react';
 
 const Header = ({ user, onLogout, onGenerateRecommendations }) => {
   return (
@@ -7,7 +8,7 @@ const Header = ({ user, onLogout, onGenerateRecommendations }) => {
       <div className="header-actions">
         <div className="user-info">
           <div className="user-avatar">
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            <User size={16} />
           </div>
           <span className="user-name">{user?.name || 'User'}</span>
         </div>

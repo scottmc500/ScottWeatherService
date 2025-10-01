@@ -1,4 +1,5 @@
 import React from 'react';
+import { Calendar, Mail } from 'lucide-react';
 import { api } from '../services/api';
 
 const Login = ({ onLogin }) => {
@@ -33,11 +34,11 @@ const Login = ({ onLogin }) => {
       </p>
       <div className="login-buttons">
         <button className="google-btn" onClick={handleGoogleLogin}>
-          <span>🔗</span>
+          <Calendar size={20} />
           Connect Google Calendar
         </button>
         <button className="microsoft-btn" onClick={handleMicrosoftLogin}>
-          <span>🔗</span>
+          <Mail size={20} />
           Connect Outlook Calendar
         </button>
       </div>

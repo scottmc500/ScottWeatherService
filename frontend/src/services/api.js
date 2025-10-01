@@ -72,7 +72,7 @@ class ApiService {
 
   async getUser() {
     try {
-      const response = await this.api.get('/auth/me');
+      const response = await this.api.get('/api/auth/me');
       return response.data;
     } catch (error) {
       return null;

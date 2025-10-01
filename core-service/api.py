@@ -26,6 +26,16 @@ CALENDAR_SERVICE_URL = os.getenv("CALENDAR_SERVICE_URL", "http://calendar-servic
 WEATHER_SERVICE_URL = os.getenv("WEATHER_SERVICE_URL", "http://weather-service:8002")
 
 # Authentication endpoints
+@auth.get("/me")
+async def get_current_user(token: str = Depends(security)):
+    """Get current user profile (alias for /profile)"""
+    return await get_user_profile(token)
+
+@auth.get("/me/public")
+async def get_current_user_public():
+    """Public endpoint to test connection (no auth required)"""
+    return {"message": "API is working", "authenticated": False}
+
 @auth.get("/profile")
 async def get_user_profile(token: str = Depends(security)):
     """Get user profile from OAuth token"""

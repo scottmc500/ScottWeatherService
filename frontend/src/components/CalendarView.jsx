@@ -1,11 +1,15 @@
 import React from 'react';
 import { format, parseISO, isToday, isTomorrow, isYesterday } from 'date-fns';
+import { Calendar } from 'lucide-react';
 
 const CalendarView = ({ events }) => {
   if (!events || events.length === 0) {
     return (
       <div className="calendar-view">
-        <h2>Calendar Events</h2>
+        <h2>
+          <Calendar size={20} />
+          Calendar Events
+        </h2>
         <div className="no-events">
           <p>No upcoming events</p>
         </div>

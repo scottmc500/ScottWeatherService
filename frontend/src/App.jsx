@@ -16,47 +16,61 @@ function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
+  // Check authentication status on app load
   useEffect(() => {
-    const loadData = async () => {
+    const checkAuth = async () => {
       try {
         setLoading(true);
-        setError(null);
-
-        // Load user profile
+        setIsAuthenticating(true);
+        
         const userData = await api.getUser();
-        setUser(userData);
-
         if (userData) {
-          // Load initial data
-          const [weatherData, eventsData, recommendationsData] = await Promise.all([
-            api.getCurrentWeather(userData.location || 'New York'),
-            api.getEvents(new Date().toISOString(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
-            api.getRecommendations()
-          ]);
-
-          setWeather(weatherData);
-          setEvents(eventsData);
-          setRecommendations(recommendationsData);
-
-          // Set up real-time updates
-          setupWebSocketListeners();
+          setUser(userData);
+          await loadUserData(userData);
+        } else {
+          setUser(null);
         }
       } catch (error) {
-        console.error('Error loading data:', error);
-        setError('Failed to load data. Please try again.');
+        console.error('Authentication check failed:', error);
+        setUser(null);
+        // Clear any invalid tokens
+        localStorage.removeItem('auth_token');
       } finally {
         setLoading(false);
+        setIsAuthenticating(false);
       }
     };
 
-    loadData();
+    checkAuth();
 
     // Cleanup on unmount
     return () => {
       api.disconnect();
     };
   }, []);
+
+  const loadUserData = async (userData) => {
+    try {
+      // Load initial data for authenticated user
+      const [weatherData, eventsData, recommendationsData] = await Promise.all([
+        api.getCurrentWeather(userData.location || 'New York'),
+        api.getEvents(new Date().toISOString(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
+        api.getRecommendations()
+      ]);
+
+      setWeather(weatherData);
+      setEvents(eventsData);
+      setRecommendations(recommendationsData);
+
+      // Set up real-time updates
+      setupWebSocketListeners();
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setError('Failed to load data. Please try again.');
+    }
+  };
 
   const setupWebSocketListeners = () => {
     // Weather updates
@@ -73,6 +87,12 @@ function App() {
     api.onRecommendationUpdate((data) => {
       setRecommendations(data);
     });
+  };
+
+  const handleLogin = async (userData) => {
+    setUser(userData);
+    setError(null);
+    await loadUserData(userData);
   };
 
   const handleGenerateRecommendations = async () => {
@@ -97,19 +117,26 @@ function App() {
       setRecommendations([]);
     } catch (error) {
       console.error('Error logging out:', error);
+      // Force logout even if API call fails
+      setUser(null);
+      setWeather(null);
+      setEvents([]);
+      setRecommendations([]);
     }
   };
 
-  if (loading) {
+  // Loading state during authentication check
+  if (loading && isAuthenticating) {
     return (
       <div className="loading">
         <div className="spinner"></div>
-        <p>Loading...</p>
+        <p>Checking authentication...</p>
       </div>
     );
   }
 
-  if (error) {
+  // Error state
+  if (error && !user) {
     return (
       <div className="error">
         <h2>Error</h2>
@@ -119,29 +146,82 @@ function App() {
     );
   }
 
-  if (!user) {
-    return <Login onLogin={setUser} />;
-  }
+  // Dashboard component for authenticated users
+  const Dashboard = () => (
+    <div className="main-content">
+      {error && (
+        <div className="error-banner">
+          <p>{error}</p>
+          <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+      <WeatherCard weather={weather} />
+      <CalendarView events={events} />
+      <Recommendations recommendations={recommendations} />
+    </div>
+  );
 
   return (
     <Router>
       <div className="app">
-        <Header 
-          user={user} 
-          onLogout={handleLogout}
-          onGenerateRecommendations={handleGenerateRecommendations}
-        />
-        
         <Routes>
+          {/* Root route - redirect based on authentication */}
           <Route path="/" element={
-            <div className="main-content">
-              <WeatherCard weather={weather} />
-              <CalendarView events={events} />
-              <Recommendations recommendations={recommendations} />
-            </div>
+            user ? (
+              <>
+                <Header 
+                  user={user} 
+                  onLogout={handleLogout}
+                  onGenerateRecommendations={handleGenerateRecommendations}
+                />
+                <Dashboard />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
           } />
-          <Route path="/calendar" element={<CalendarView events={events} />} />
-          <Route path="/recommendations" element={<Recommendations recommendations={recommendations} />} />
+          
+          {/* Login route */}
+          <Route path="/login" element={
+            user ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Login onLogin={handleLogin} />
+            )
+          } />
+          
+          {/* Protected routes - require authentication */}
+          <Route path="/calendar" element={
+            user ? (
+              <>
+                <Header 
+                  user={user} 
+                  onLogout={handleLogout}
+                  onGenerateRecommendations={handleGenerateRecommendations}
+                />
+                <CalendarView events={events} />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } />
+          
+          <Route path="/recommendations" element={
+            user ? (
+              <>
+                <Header 
+                  user={user} 
+                  onLogout={handleLogout}
+                  onGenerateRecommendations={handleGenerateRecommendations}
+                />
+                <Recommendations recommendations={recommendations} />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } />
+          
+          {/* Catch all - redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         

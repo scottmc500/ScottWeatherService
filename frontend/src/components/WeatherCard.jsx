@@ -1,5 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
+import { Thermometer, Droplets, Wind, Eye } from 'lucide-react';
 
 const WeatherCard = ({ weather }) => {
   if (!weather) {
@@ -70,31 +71,46 @@ const WeatherCard = ({ weather }) => {
         </div>
         <div className="weather-details">
           <div className="weather-detail">
-            <span className="weather-detail-label">Feels Like</span>
+            <span className="weather-detail-label">
+              <Thermometer size={16} />
+              Feels Like
+            </span>
             <span className="weather-detail-value">
               {formatTemperature(weather.main.feels_like)}
             </span>
           </div>
           <div className="weather-detail">
-            <span className="weather-detail-label">Humidity</span>
+            <span className="weather-detail-label">
+              <Droplets size={16} />
+              Humidity
+            </span>
             <span className="weather-detail-value">
               {formatHumidity(weather.main.humidity)}
             </span>
           </div>
           <div className="weather-detail">
-            <span className="weather-detail-label">Wind</span>
+            <span className="weather-detail-label">
+              <Wind size={16} />
+              Wind
+            </span>
             <span className="weather-detail-value">
               {formatWindSpeed(weather.wind.speed)}
             </span>
           </div>
           <div className="weather-detail">
-            <span className="weather-detail-label">Pressure</span>
+            <span className="weather-detail-label">
+              <Thermometer size={16} />
+              Pressure
+            </span>
             <span className="weather-detail-value">
               {formatPressure(weather.main.pressure)}
             </span>
           </div>
           <div className="weather-detail">
-            <span className="weather-detail-label">Visibility</span>
+            <span className="weather-detail-label">
+              <Eye size={16} />
+              Visibility
+            </span>
             <span className="weather-detail-value">
               {formatVisibility(weather.visibility)}
             </span>
