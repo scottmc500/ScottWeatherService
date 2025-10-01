@@ -1,0 +1,197 @@
+services:
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: scott-weather-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - weather-service-network
+
+  # Core Service - Main API and business logic
+  core-service:
+    build:
+      context: ./core-service
+      dockerfile: Dockerfile
+    container_name: scott-weather-core
+    ports:
+      - "8001:8000"
+    environment:
+      - MONGODB_URI=mongodb://weather-service-user:weather-service-password@mongodb:27017/weather-service
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=your-openai-api-key-here
+      - CORE_SERVICE_URL=http://core-service:8000
+      - CALENDAR_SERVICE_URL=http://calendar-service:8000
+      - WEATHER_SERVICE_URL=http://weather-service:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      calendar-service:
+        condition: service_healthy
+      weather-service:
+        condition: service_healthy
+    volumes:
+      - ./core-service:/app
+      - /app/__pycache__
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - weather-service-network
+
+  # Calendar Service - Google Calendar and Microsoft Graph integration
+  calendar-service:
+    build:
+      context: ./calendar-service
+      dockerfile: Dockerfile
+    container_name: scott-weather-calendar
+    ports:
+      - "8002:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - GOOGLE_CLIENT_ID=your-google-client-id-here
+      - GOOGLE_CLIENT_SECRET=your-google-client-secret-here
+      - MICROSOFT_CLIENT_ID=your-microsoft-client-id-here
+      - MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret-here
+      - CORE_SERVICE_URL=http://core-service:8000
+      - CALENDAR_SERVICE_URL=http://calendar-service:8000
+      - WEATHER_SERVICE_URL=http://weather-service:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./calendar-service:/app
+      - /app/__pycache__
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - weather-service-network
+
+  # Weather Service - OpenWeatherMap integration
+  weather-service:
+    build:
+      context: ./weather-service
+      dockerfile: Dockerfile
+    container_name: scott-weather-weather
+    ports:
+      - "8003:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - OPENWEATHERMAP_API_KEY=your-openweathermap-api-key-here
+      - CORE_SERVICE_URL=http://core-service:8000
+      - CALENDAR_SERVICE_URL=http://calendar-service:8000
+      - WEATHER_SERVICE_URL=http://weather-service:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./weather-service:/app
+      - /app/__pycache__
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - weather-service-network
+
+  # Frontend - React application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: scott-weather-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001
+    depends_on:
+      core-service:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://0.0.0.0:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - weather-service-network
+
+  # Development database (optional - for local testing)
+  mongodb:
+    image: mongo:7
+    container_name: scott-weather-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=weather-service
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    command: mongod --auth
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - weather-service-network
+
+  # MongoDB Express - Database administration (optional)
+  mongo-express:
+    image: mongo-express:1.0.0
+    container_name: scott-weather-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:password@mongodb:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=password
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - weather-service-network
+
+
+
+volumes:
+  redis_data:
+    driver: local
+  mongodb_data:
+    driver: local
+
+networks:
+  weather-service-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
