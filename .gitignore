@@ -1,27 +1,47 @@
-# Weather Service .gitignore
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Environment Variables
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Production builds
+*.tgz
+*.tar.gz
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# dotenv environment variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-env.example
 
-# Terraform
-terraform/secrets.tfvars
-terraform/.terraform/
-terraform/.terraform.lock.hcl
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
-terraform/terraform.tfvars
-*.tfplan
-*.tfstate
-*.tfstate.*
+# Logs
+logs
+*.log
+firebase-debug.log
+firebase-debug.*.log
+firebase-emulators.log
+nextjs-dev.log
 
-# Kubernetes Secrets
-k8s-secrets.json
-k8s/secrets.yaml
+# Firebase
+.firebase/
+firestore-debug.log
 
 # Python
 __pycache__/
@@ -41,164 +61,47 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual Environments
-venv/
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.venv
 env/
+venv/
 ENV/
 env.bak/
 venv.bak/
-.venv/
 
-# PyCharm
-.idea/
-
-# VS Code
+# IDEs
 .vscode/
-*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pytest
-.pytest_cache/
-.coverage
-htmlcov/
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Grunt intermediate storage
-.grunt
-
-# Bower dependency directory
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release
-
-# Dependency directories
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional stylelint cache
-.stylelintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-out
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-storybook-static
-
-# Temporary folders
-tmp/
-temp/
-
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# Docker
-.dockerignore
-docker-compose.override.yml
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Redis
-dump.rdb
-
-# MongoDB
-*.mongodb
-
-# SSL Certificates
-*.pem
-*.key
-*.crt
-*.csr
-ssl/
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# OS generated files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -207,176 +110,6 @@ ssl/
 ehthumbs.db
 Thumbs.db
 
-# Windows
-*.lnk
-
-# Linux
-*~
-
-# IDE and Editor files
-*.swp
-*.swo
-*~
-.project
-.settings/
-.classpath
-
-# Application specific
-uploads/
-downloads/
-cache/
-sessions/
-
-# Monitoring and Logs
-logs/
-monitoring/logs/
-grafana/logs/
-prometheus/logs/
-
-# Build artifacts
-build/
-dist/
-target/
-
-# Package managers
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
-# Local development
-.local/
-local/
-
-# Secrets and sensitive files
-secrets/
-*.secret
-*.key
-*.pem
-*.crt
-*.csr
-*.p12
-*.pfx
-
-# API Keys and credentials
-api-keys.json
-credentials.json
-service-account.json
-google-credentials.json
-microsoft-credentials.json
-
-# Terraform state and plans
-*.tfplan
-*.tfstate
-*.tfstate.backup
-.terraform/
-.terraform.lock.hcl
-
-# Kubernetes
-k8s-secrets.json
-k8s/secrets.yaml
-k8s/secrets/
-
-# Monitoring data
-monitoring/data/
-prometheus/data/
-grafana/data/
-
-# Application data
-data/
-storage/
-uploads/
-
-# Test files
-test-results/
-coverage/
-.nyc_output/
-
-# Documentation build
-docs/_build/
-docs/build/
-
-# IDE specific
-.vscode/settings.json
-.vscode/launch.json
-.vscode/extensions.json
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/dictionaries
-.idea/shelf
-
-# JetBrains IDEs
-.idea/
-*.iml
-*.ipr
-*.iws
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
-*.swp
-*.swo
-*~
-
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# MacOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# Temporary files
-*.tmp
-*.temp
-*.log
-*.pid
-*.seed
-*.pid.lock
-
-# Application specific ignores
-# Add any project-specific files to ignore here
+# Temporary folders
+tmp/
+temp/
