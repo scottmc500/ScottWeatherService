@@ -1,11 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Remove static export for proper SSR
-  // output: 'export',
-  // trailingSlash: true,
+  output: 'export',
+  trailingSlash: true,
   images: {
-    unoptimized: true
+    unoptimized: true,
+    domains: ['lh3.googleusercontent.com', 'graph.microsoft.com']
   }
 };
 

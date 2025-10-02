@@ -3,17 +3,13 @@ import { auth } from '../lib/firebase';
 
 // Determine API base URL based on environment
 const getApiBaseUrl = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://us-central1-scottweatherservice.cloudfunctions.net';
-  }
-  
   // Check if we're using emulators
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
     return 'http://localhost:5001/scott-weather-service/us-central1';
   }
   
   // Development with real Firebase
-  return 'https://us-central1-scottweatherservice.cloudfunctions.net';
+  return 'https://us-central1-scott-weather-service.cloudfunctions.net';
 };
 
 const API_BASE_URL = getApiBaseUrl();

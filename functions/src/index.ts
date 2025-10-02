@@ -14,9 +14,22 @@ export const weatherApi = onRequest(
   },
   async (req, res) => {
     try {
-      // Set CORS headers
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      // Set CORS headers - SECURE: Only allow specific origins
+      const origin = req.headers.origin;
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "https://scott-weather-service.web.app",
+        "https://scott-weather-service.firebaseapp.com"
+      ];
+      
+      if (origin && allowedOrigins.includes(origin)) {
+        res.set("Access-Control-Allow-Origin", origin);
+      } else {
+        // Reject requests from unauthorized origins
+        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
+        return;
+      }
+      res.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
       res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
       if (req.method === "OPTIONS") {
@@ -60,8 +73,21 @@ export const calendarApi = onRequest(
   },
   async (req, res) => {
     try {
-      // Set CORS headers
-      res.set("Access-Control-Allow-Origin", "*");
+      // Set CORS headers - SECURE: Only allow specific origins
+      const origin = req.headers.origin;
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "https://scott-weather-service.web.app",
+        "https://scott-weather-service.firebaseapp.com"
+      ];
+      
+      if (origin && allowedOrigins.includes(origin)) {
+        res.set("Access-Control-Allow-Origin", origin);
+      } else {
+        // Reject requests from unauthorized origins
+        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
+        return;
+      }
       res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
@@ -107,8 +133,21 @@ export const recommendationsApi = onRequest(
   },
   async (req, res) => {
     try {
-      // Set CORS headers
-      res.set("Access-Control-Allow-Origin", "*");
+      // Set CORS headers - SECURE: Only allow specific origins
+      const origin = req.headers.origin;
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "https://scott-weather-service.web.app",
+        "https://scott-weather-service.firebaseapp.com"
+      ];
+      
+      if (origin && allowedOrigins.includes(origin)) {
+        res.set("Access-Control-Allow-Origin", origin);
+      } else {
+        // Reject requests from unauthorized origins
+        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
+        return;
+      }
       res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
@@ -215,6 +254,8 @@ async function getWeatherForecast(location: string, date?: string) {
  */
 async function getCalendarEvents(authHeader: string) {
   // Mock calendar data - replace with real Google/Microsoft Calendar API
+  // Note: authHeader is available for future calendar API integration
+  console.log("Auth header provided:", authHeader ? "Yes" : "No");
   const events = [
     {
       id: "1",
@@ -247,6 +288,8 @@ async function getCalendarEvents(authHeader: string) {
  */
 async function generateRecommendations(authHeader: string) {
   // Mock recommendations - replace with AI/ML logic
+  // Note: authHeader is available for future user-specific recommendations
+  console.log("Auth header provided:", authHeader ? "Yes" : "No");
   const recommendations = [
     {
       id: "1",

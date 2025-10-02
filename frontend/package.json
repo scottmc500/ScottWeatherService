@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "export": "next build && next export",
-    "dev:emulator": "NODE_ENV=development next dev --turbopack",
+    "export": "next build",
+    "dev:emulator": "NODE_ENV=development next dev",
     "dev:all": "concurrently \"firebase emulators:start --only auth,firestore,hosting\" \"npm run dev\" --names \"🔥,⚡\" --prefix-colors \"red,blue\""
   },
   "dependencies": {
