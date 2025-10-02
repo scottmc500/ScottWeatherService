@@ -52,11 +52,11 @@ export class AuthService {
         const userProfile = await this.getUserProfile(user.uid);
         return userProfile || await this.saveUserProfile(user, 'google');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Google sign-in error:', error);
       
       // Handle account exists with different credential error
-      if (error.code === 'auth/account-exists-with-different-credential') {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/account-exists-with-different-credential') {
         throw new Error('This email is already associated with a Microsoft account. Please sign in with Microsoft instead. Account linking with the same email address is not supported by Firebase.');
       }
       
@@ -81,11 +81,11 @@ export class AuthService {
         const userProfile = await this.getUserProfile(user.uid);
         return userProfile || await this.saveUserProfile(user, 'microsoft');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Microsoft sign-in error:', error);
       
       // Handle account exists with different credential error
-      if (error.code === 'auth/account-exists-with-different-credential') {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/account-exists-with-different-credential') {
         throw new Error('This email is already associated with a Google account. Please sign in with Google instead. Account linking with the same email address is not supported by Firebase.');
       }
       

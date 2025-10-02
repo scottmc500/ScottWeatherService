@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { UserProfile, AuthService } from '../services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation } from '../services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, CloudRain, Wind, Droplets, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -119,10 +120,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               </button>
               <div className="flex items-center space-x-3">
                 {user.photoURL ? (
-                  <img
+                  <Image
                     className="h-8 w-8 rounded-full ring-2 ring-white shadow-sm"
                     src={user.photoURL}
                     alt={user.displayName || 'User'}
+                    width={32}
+                    height={32}
                   />
                 ) : (
                   <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
@@ -444,7 +447,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="flex items-center space-x-4">
                 <div className="h-16 w-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
                   {user.photoURL ? (
-                    <img src={user.photoURL} alt="Profile" className="h-16 w-16 rounded-full" />
+                    <Image src={user.photoURL} alt="Profile" className="h-16 w-16 rounded-full" width={64} height={64} />
                   ) : (
                     <User className="h-8 w-8 text-white" />
                   )}
@@ -523,7 +526,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <h4 className="text-sm font-medium text-blue-800 mb-2">Sign-in Options</h4>
                     <p className="text-sm text-blue-700">
                       You can sign out and sign in with either Google or Microsoft. However, 
-                      Firebase doesn't allow linking accounts that use the same email address with different providers.
+                      Firebase doesn&apos;t allow linking accounts that use the same email address with different providers.
                     </p>
                   </div>
                 </div>
