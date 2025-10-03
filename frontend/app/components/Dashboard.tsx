@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { UserProfile, AuthService } from '../services/auth';
-import { ApiService, WeatherData, CalendarEvent, Recommendation } from '../services/weatherApi';
+import { UserProfile, AuthService } from '@/services/auth';
+import { ApiService, WeatherData, CalendarEvent, Recommendation } from '@/services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, CloudRain, Wind, Droplets, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
 import CalendarSync from './CalendarSync';
 

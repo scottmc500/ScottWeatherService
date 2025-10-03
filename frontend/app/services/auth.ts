@@ -7,7 +7,7 @@ import {
   User,
   getAdditionalUserInfo,
 } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Initialize providers (Firebase Auth only - no calendar scopes)

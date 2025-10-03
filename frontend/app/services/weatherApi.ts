@@ -1,15 +1,17 @@
-// Weather API service for interacting with Firebase Functions
-import { auth } from '../lib/firebase';
+// Weather API service (Functions removed - update to use direct APIs)
+import { auth } from '@/lib/firebase';
 
 // Determine API base URL based on environment
+// NOTE: Firebase Functions have been removed - update these URLs to point to your actual APIs
 const getApiBaseUrl = () => {
-  // Check if we're using emulators
+  // Check if we're using emulators (Functions emulator no longer available)
   if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
-    return 'http://localhost:5001/scott-weather-service/us-central1';
+    // TODO: Update to point to your actual API endpoints
+    return 'http://localhost:3001/api'; // Example: Next.js API routes
   }
   
-  // Development with real Firebase
-  return 'https://us-central1-scott-weather-service.cloudfunctions.net';
+  // Production - update to your actual API endpoints
+  return 'https://your-api-domain.com/api'; // TODO: Update this
 };
 
 const API_BASE_URL = getApiBaseUrl();

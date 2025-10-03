@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "export": "next build",
     "dev:emulator": "NODE_ENV=development next dev",
-    "dev:all": "concurrently \"firebase emulators:start --only auth,firestore,hosting\" \"npm run dev\" --names \"🔥,⚡\" --prefix-colors \"red,blue\""
+    "dev:all": "concurrently \"firebase emulators:start --only firestore\" \"npm run dev\" --names \"🔥,⚡\" --prefix-colors \"red,blue\""
   },
   "dependencies": {
     "firebase": "^12.3.0",

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AuthService, UserProfile } from '../src/services/auth';
-import LoginForm from '../src/components/LoginForm';
-import Dashboard from '../src/components/Dashboard';
+import { AuthService, UserProfile } from '@/services/auth';
+import LoginForm from '@/components/LoginForm';
+import Dashboard from '@/components/Dashboard';
 
 export default function HomePage() {
   const [user, setUser] = useState<UserProfile | null>(null);

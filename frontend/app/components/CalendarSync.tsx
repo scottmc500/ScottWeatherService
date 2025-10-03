@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CalendarApiService, CalendarSyncResult } from '../services/weatherApi';
-import { GoogleCalendarOAuthService } from '../services/googleCalendarOAuth';
+import { CalendarApiService, CalendarSyncResult } from '@/services/weatherApi';
+import { GoogleCalendarOAuthService } from '@/services/googleCalendarOAuth';
 import { CheckCircle, Loader2, Calendar } from 'lucide-react';
 
 interface CalendarSyncProps {
