@@ -6,6 +6,7 @@ import { UserProfile, AuthService } from '@/services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation } from '@/services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, CloudRain, Wind, Droplets, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
 import CalendarSync from './CalendarSync';
+import FunctionsTest from './FunctionsTest';
 
 interface DashboardProps {
   user: UserProfile;
@@ -49,15 +50,37 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const loadOverviewData = async () => {
     setLoading(prev => ({ ...prev, weather: true, calendar: true }));
     try {
-      const weather = await ApiService.weather.getCurrentWeather();
-      setWeatherData(weather);
+      // Get user's location for weather data
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const weather = await ApiService.weather.getCurrentWeather(
+                position.coords.latitude,
+                position.coords.longitude
+              );
+              setWeatherData(weather);
+            } catch (error) {
+              console.error('Error loading weather data:', error);
+            } finally {
+              setLoading(prev => ({ ...prev, weather: false }));
+            }
+          },
+          (error) => {
+            console.error('Error getting location:', error);
+            setLoading(prev => ({ ...prev, weather: false }));
+          }
+        );
+      } else {
+        console.error('Geolocation is not supported by this browser.');
+        setLoading(prev => ({ ...prev, weather: false }));
+      }
       
-      // Also load calendar data for overview
-      const calendar = await ApiService.calendar.getCalendarEvents();
-      setCalendarEvents(calendar.events);
+      // Load calendar data for overview (will need Google Calendar token)
+      // For now, skip calendar loading in overview since it requires authentication
+      setLoading(prev => ({ ...prev, calendar: false }));
     } catch (error) {
       console.error('Error loading overview data:', error);
-    } finally {
       setLoading(prev => ({ ...prev, weather: false, calendar: false }));
     }
   };
@@ -73,7 +96,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const loadCalendarData = async () => {
     setLoading(prev => ({ ...prev, calendar: true }));
     try {
-      const calendar = await ApiService.calendar.getCalendarEvents();
+      // Import the Google Calendar OAuth service
+      const { GoogleCalendarOAuthService } = await import('@/services/googleCalendarOAuth');
+      
+      // Check if user has Google Calendar access
+      const tokens = GoogleCalendarOAuthService.getStoredTokens();
+      
+      if (!tokens?.access_token) {
+        console.log('No Google Calendar access token found. User needs to authenticate first.');
+        setLoading(prev => ({ ...prev, calendar: false }));
+        return;
+      }
+
+      const calendar = await ApiService.calendar.getCalendarEvents(tokens.access_token);
       setCalendarEvents(calendar.events);
     } catch (error) {
       console.error('Error loading calendar:', error);
@@ -338,6 +373,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               )}
             </div>
+
+            {/* Functions Test */}
+            <FunctionsTest />
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

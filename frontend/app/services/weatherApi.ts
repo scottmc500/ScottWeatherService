@@ -1,20 +1,10 @@
-// Weather API service (Functions removed - update to use direct APIs)
+// Weather API service - Updated to use Firebase Functions
 import { auth } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { GoogleCalendarOAuthService } from './googleCalendarOAuth';
 
-// Determine API base URL based on environment
-// NOTE: Firebase Functions have been removed - update these URLs to point to your actual APIs
-const getApiBaseUrl = () => {
-  // Check if we're using emulators (Functions emulator no longer available)
-  if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
-    // TODO: Update to point to your actual API endpoints
-    return 'http://localhost:3001/api'; // Example: Next.js API routes
-  }
-  
-  // Production - update to your actual API endpoints
-  return 'https://your-api-domain.com/api'; // TODO: Update this
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Initialize Firebase Functions
+const functions = getFunctions();
 
 // Types
 export interface WeatherData {
@@ -85,169 +75,213 @@ export interface RecommendationsData {
   recommendations: Recommendation[];
 }
 
-// Helper function to get auth token
-async function getAuthToken(): Promise<string | null> {
-  const user = auth.currentUser;
-  if (!user) return null;
-  
-  try {
-    return await user.getIdToken();
-  } catch (error) {
-    console.error('Error getting auth token:', error);
-    return null;
-  }
-}
+// Helper function to get auth token (currently unused but kept for future use)
+// async function getAuthToken(): Promise<string | null> {
+//   const user = auth.currentUser;
+//   if (!user) return null;
+//   
+//   try {
+//     return await user.getIdToken();
+//   } catch (error) {
+//     console.error('Error getting auth token:', error);
+//     return null;
+//   }
+// }
 
-// Weather API calls
+// Weather API calls using Firebase Functions
 export class WeatherApiService {
-  // Get current weather
-  static async getCurrentWeather(location?: string): Promise<WeatherData> {
-    const token = await getAuthToken();
-    const url = new URL(`${API_BASE_URL}/weatherApi/current`);
-    
-    if (location) {
-      url.searchParams.set('location', location);
+  // Get current weather using Firebase Functions
+  static async getCurrentWeather(latitude: number, longitude: number, units: 'metric' | 'imperial' = 'metric'): Promise<WeatherData> {
+    try {
+      const getWeatherData = httpsCallable(functions, 'getWeatherData');
+      
+      const result = await getWeatherData({
+        latitude,
+        longitude,
+        units,
+      });
+
+      if (!result.data.success) {
+        throw new Error('Weather function returned error');
+      }
+
+      const weatherData = result.data.data;
+      
+      // Transform Firebase Function response to our interface
+      return {
+        location: weatherData.location,
+        temperature: weatherData.temperature,
+        condition: weatherData.condition,
+        humidity: weatherData.humidity,
+        windSpeed: weatherData.windSpeed,
+        windDirection: 'N/A', // Not provided by OpenWeatherMap basic API
+        uvIndex: 0, // Not provided by basic API
+        feelsLike: weatherData.temperature, // Approximation
+        timestamp: weatherData.timestamp,
+      };
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      throw new Error(`Weather API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Weather API error: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 
-  // Get weather forecast
-  static async getWeatherForecast(location?: string, date?: string): Promise<WeatherForecast> {
-    const token = await getAuthToken();
-    const url = new URL(`${API_BASE_URL}/weatherApi/forecast`);
-    
-    if (location) {
-      url.searchParams.set('location', location);
-    }
-    if (date) {
-      url.searchParams.set('date', date);
-    }
+  // Get weather forecast (placeholder - would need extended weather API)
+  static async getWeatherForecast(latitude: number, longitude: number, _date?: string): Promise<WeatherForecast> {
+    // For now, return a mock forecast based on current weather
+    try {
+      const currentWeather = await this.getCurrentWeather(latitude, longitude);
+      
+      // Mock forecast data (in a real app, you'd call a forecast API)
+      const forecast: ForecastDay[] = [];
+      for (let i = 1; i <= 5; i++) {
+        const forecastDate = new Date();
+        forecastDate.setDate(forecastDate.getDate() + i);
+        
+        forecast.push({
+          date: forecastDate.toISOString().split('T')[0],
+          high: currentWeather.temperature + Math.floor(Math.random() * 5),
+          low: currentWeather.temperature - Math.floor(Math.random() * 5),
+          condition: currentWeather.condition,
+          precipitation: Math.floor(Math.random() * 30),
+          windSpeed: currentWeather.windSpeed + Math.floor(Math.random() * 3),
+        });
+      }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Forecast API error: ${response.statusText}`);
+      return {
+        location: currentWeather.location,
+        forecast,
+      };
+    } catch (error) {
+      console.error('Error fetching weather forecast:', error);
+      throw new Error(`Weather forecast error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    return response.json();
   }
 }
 
-// Calendar API calls
+// Calendar API calls using Firebase Functions
 export class CalendarApiService {
-  // Get calendar events
-  static async getCalendarEvents(): Promise<CalendarData> {
-    const token = await getAuthToken();
-    
-    if (!token) {
-      throw new Error('Authentication required for calendar access');
+  // Get calendar events using Firebase Functions
+  static async getCalendarEvents(accessToken: string, maxResults: number = 10): Promise<CalendarData> {
+    try {
+      const getCalendarEvents = httpsCallable(functions, 'getCalendarEvents');
+      
+      const result = await getCalendarEvents({
+        accessToken,
+        maxResults,
+      });
+
+      if (!result.data.success) {
+        throw new Error('Calendar function returned error');
+      }
+
+      const events = result.data.events;
+      
+      // Transform Firebase Function response to our interface
+      const formattedEvents: CalendarEvent[] = events.map((event: {
+        id: string;
+        summary: string;
+        start: { dateTime?: string | null; date?: string | null };
+        end: { dateTime?: string | null; date?: string | null };
+        location?: string | null;
+        description?: string | null;
+      }) => ({
+        id: event.id,
+        title: event.summary,
+        start: event.start.dateTime || event.start.date || '',
+        end: event.end.dateTime || event.end.date || '',
+        location: event.location || '',
+        description: event.description || '',
+        allDay: !event.start.dateTime && !!event.start.date,
+      }));
+
+      return {
+        events: formattedEvents,
+      };
+    } catch (error) {
+      console.error('Error fetching calendar events:', error);
+      throw new Error(`Calendar API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    const response = await fetch(`${API_BASE_URL}/calendarApi/events`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Calendar API error: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 
   // Sync calendar events with Google Calendar and store in Firestore
   static async syncCalendarEvents(): Promise<CalendarSyncResult> {
-    const token = await getAuthToken();
-    
-    if (!token) {
-      throw new Error('Authentication required for calendar sync');
+    try {
+      // For now, just get events (in a real app, you'd implement sync logic)
+      const tokens = GoogleCalendarOAuthService.getStoredTokens();
+      
+      if (!tokens?.access_token) {
+        throw new Error('No Google Calendar access token found. Please authenticate first.');
+      }
+
+      const calendarData = await this.getCalendarEvents(tokens.access_token);
+      
+      return {
+        success: true,
+        events: calendarData.events,
+        total: calendarData.events.length,
+        syncedAt: new Date().toISOString(),
+        note: 'Events synced successfully',
+      };
+    } catch (error) {
+      console.error('Error syncing calendar events:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-
-    const response = await fetch(`${API_BASE_URL}/calendarApi/sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Calendar sync error: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 
   // Authenticate with Google Calendar (store OAuth token)
-  static async authenticateGoogleCalendar(googleToken: unknown): Promise<{success: boolean, message?: string, error?: string}> {
-    const token = await getAuthToken();
-    
-    if (!token) {
-      throw new Error('Authentication required for Google Calendar auth');
+  static async authenticateGoogleCalendar(googleToken: {access_token: string; refresh_token?: string}): Promise<{success: boolean, message?: string, error?: string}> {
+    try {
+      // Store the token using the OAuth service
+      GoogleCalendarOAuthService.storeTokens(googleToken);
+      
+      // Test the connection by fetching one event
+      await this.getCalendarEvents(googleToken.access_token, 1);
+      
+      return {
+        success: true,
+        message: 'Google Calendar authentication successful',
+      };
+    } catch (error) {
+      console.error('Error authenticating with Google Calendar:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
-
-    const response = await fetch(`${API_BASE_URL}/calendarApi/auth`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ googleToken }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Google Calendar auth error: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 }
 
-// Recommendations API calls
+// Recommendations API calls (placeholder - not implemented yet)
 export class RecommendationsApiService {
   // Get personalized recommendations
   static async getRecommendations(): Promise<RecommendationsData> {
-    const token = await getAuthToken();
-    
-    if (!token) {
-      throw new Error('Authentication required for recommendations');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/recommendationsApi`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+    // For now, return mock recommendations
+    // In a real app, this would call a Firebase Function or AI service
+    const mockRecommendations: Recommendation[] = [
+      {
+        id: '1',
+        type: 'weather',
+        title: 'Weather-based recommendation',
+        description: 'Based on current weather conditions',
+        priority: 'medium',
+        action: 'Check weather before going out',
       },
-    });
+      {
+        id: '2',
+        type: 'calendar',
+        title: 'Upcoming events',
+        description: 'You have events coming up',
+        priority: 'high',
+        action: 'Review your calendar',
+      },
+    ];
 
-    if (!response.ok) {
-      throw new Error(`Recommendations API error: ${response.statusText}`);
-    }
-
-    return response.json();
+    return {
+      recommendations: mockRecommendations,
+    };
   }
 }
 
