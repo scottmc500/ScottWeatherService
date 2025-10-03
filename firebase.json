@@ -1,7 +1,8 @@
 {
   "apphosting": {
     "scott-weather-frontend": {
-      "source": "frontend"
+      "source": "frontend",
+      "runtime": "nodejs22"
     }
   },
   "firestore": {
