@@ -1,11 +1,9 @@
 {
-  "hosting": {
-    "public": "frontend/out",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ]
+  "apphosting": {
+    "backend": {
+      "source": "frontend",
+      "runtime": "nodejs22"
+    }
   },
   "firestore": {
     "database": "(default)",

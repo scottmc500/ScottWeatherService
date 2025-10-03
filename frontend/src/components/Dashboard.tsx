@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { UserProfile, AuthService } from '../services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation } from '../services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, CloudRain, Wind, Droplets, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
+import CalendarSync from './CalendarSync';
 
 interface DashboardProps {
   user: UserProfile;
@@ -13,6 +14,15 @@ interface DashboardProps {
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'calendar' | 'weather' | 'recommendations' | 'profile'>('overview');
+  
+  // Debug user data
+  console.log('👤 Dashboard received user data:', {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    provider: user.provider
+  });
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -27,16 +37,37 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     loadOverviewData();
   }, []);
 
+  // Load data when tabs change
+  useEffect(() => {
+    if (activeTab === 'calendar') {
+      loadCalendarData();
+    } else if (activeTab === 'recommendations') {
+      loadRecommendations();
+    }
+  }, [activeTab]);
+
   const loadOverviewData = async () => {
-    setLoading(prev => ({ ...prev, weather: true }));
+    setLoading(prev => ({ ...prev, weather: true, calendar: true }));
     try {
       const weather = await ApiService.weather.getCurrentWeather();
       setWeatherData(weather);
+      
+      // Also load calendar data for overview
+      const calendar = await ApiService.calendar.getCalendarEvents();
+      setCalendarEvents(calendar.events);
     } catch (error) {
-      console.error('Error loading weather:', error);
+      console.error('Error loading overview data:', error);
     } finally {
-      setLoading(prev => ({ ...prev, weather: false }));
+      setLoading(prev => ({ ...prev, weather: false, calendar: false }));
     }
+  };
+
+  // Get today's events count
+  const getTodaysEventsCount = () => {
+    const today = new Date().toDateString();
+    return calendarEvents.filter(event => 
+      new Date(event.start).toDateString() === today
+    ).length;
   };
 
   const loadCalendarData = async () => {
@@ -64,7 +95,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   };
 
   // Load data when switching tabs
-  const handleTabChange = (tabId: 'overview' | 'calendar' | 'weather' | 'recommendations') => {
+  const handleTabChange = (tabId: 'overview' | 'calendar' | 'weather' | 'recommendations' | 'profile') => {
     setActiveTab(tabId);
     
     if (tabId === 'calendar' && calendarEvents.length === 0) {
@@ -97,6 +128,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     { id: 'recommendations', name: 'Recommendations', icon: Bell },
     { id: 'profile', name: 'Profile', icon: Settings },
   ];
+
+  // Debug environment variables
+  console.log('Dashboard - Environment Debug:', {
+    hasGoogleClientId: !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    clientIdLength: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.length || 0,
+    nodeEnv: process.env.NODE_ENV,
+    useEmulators: process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -161,7 +200,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => handleTabChange(tab.id as 'overview' | 'calendar' | 'weather' | 'recommendations')}
+                  onClick={() => handleTabChange(tab.id as 'overview' | 'calendar' | 'weather' | 'recommendations' | 'profile')}
                   className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600'
@@ -195,7 +234,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="hidden md:block">
                   <div className="flex items-center text-sm text-gray-500">
                     <MapPin className="h-4 w-4 mr-1" />
-                    San Francisco, CA
+                    {weatherData?.location || 'Loading location...'}
                   </div>
                 </div>
               </div>
@@ -209,7 +248,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <Calendar className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-gray-900">3</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading.calendar ? '...' : getTodaysEventsCount()}
+                    </p>
                     <p className="text-sm text-gray-600">Events Today</p>
                   </div>
                 </div>
@@ -323,8 +364,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {activeTab === 'calendar' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Calendar Events</h3>
+          <div className="space-y-6">
+            <CalendarSync onSyncComplete={(result) => {
+              if (result.success && result.events) {
+                setCalendarEvents(result.events);
+              }
+            }} />
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Calendar Events</h3>
             {loading.calendar ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -332,26 +380,51 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               </div>
             ) : calendarEvents.length > 0 ? (
               <div className="space-y-4">
-                {calendarEvents.map((event) => (
-                  <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">{event.title}</h4>
-                        <p className="text-sm text-gray-600 mt-1">{event.description}</p>
-                        {event.location && (
-                          <p className="text-sm text-gray-500 mt-1 flex items-center">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            {event.location}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right text-sm text-gray-500">
-                        <p>{new Date(event.start).toLocaleDateString()}</p>
-                        <p>{new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                {calendarEvents.map((event) => {
+                  const startTime = new Date(event.start);
+                  const endTime = new Date(event.end);
+                  const isAllDay = event.allDay;
+                  const isToday = startTime.toDateString() === new Date().toDateString();
+                  
+                  return (
+                    <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-medium text-gray-900">{event.title}</h4>
+                            {isToday && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Today
+                              </span>
+                            )}
+                          </div>
+                          {event.description && (
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{event.description}</p>
+                          )}
+                          {event.location && (
+                            <p className="text-sm text-gray-500 mt-1 flex items-center">
+                              <MapPin className="h-4 w-4 mr-1" />
+                              {event.location}
+                            </p>
+                          )}
+                          {event.attendees && event.attendees.length > 0 && (
+                            <p className="text-sm text-gray-500 mt-1">
+                              {event.attendees.length} attendee{event.attendees.length !== 1 ? 's' : ''}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right text-sm text-gray-500 ml-4">
+                          <p className="font-medium">{startTime.toLocaleDateString()}</p>
+                          {isAllDay ? (
+                            <p className="text-xs">All day</p>
+                          ) : (
+                            <p>{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-12">
@@ -366,6 +439,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </button>
               </div>
             )}
+            </div>
           </div>
         )}
 

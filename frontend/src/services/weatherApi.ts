@@ -48,10 +48,26 @@ export interface CalendarEvent {
   end: string;
   location: string;
   description: string;
+  allDay?: boolean;
+  attendees?: Array<{
+    email: string;
+    name: string;
+    responseStatus: string;
+  }>;
 }
 
 export interface CalendarData {
   events: CalendarEvent[];
+}
+
+export interface CalendarSyncResult {
+  success: boolean;
+  events?: CalendarEvent[];
+  total?: number;
+  syncedAt?: string;
+  userId?: string;
+  error?: string;
+  note?: string;
 }
 
 export interface Recommendation {
@@ -154,6 +170,53 @@ export class CalendarApiService {
 
     if (!response.ok) {
       throw new Error(`Calendar API error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Sync calendar events with Google Calendar and store in Firestore
+  static async syncCalendarEvents(): Promise<CalendarSyncResult> {
+    const token = await getAuthToken();
+    
+    if (!token) {
+      throw new Error('Authentication required for calendar sync');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/calendarApi/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Calendar sync error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Authenticate with Google Calendar (store OAuth token)
+  static async authenticateGoogleCalendar(googleToken: unknown): Promise<{success: boolean, message?: string, error?: string}> {
+    const token = await getAuthToken();
+    
+    if (!token) {
+      throw new Error('Authentication required for Google Calendar auth');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/calendarApi/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ googleToken }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google Calendar auth error: ${response.statusText}`);
     }
 
     return response.json();

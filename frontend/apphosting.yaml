@@ -1,0 +1,8 @@
+run:
+  buildCommand: npm run build
+  startCommand: npm start
+  env:
+    - variable: NODE_ENV
+      value: production
+    - variable: NEXT_PUBLIC_USE_FIREBASE_EMULATORS
+      value: "false"
