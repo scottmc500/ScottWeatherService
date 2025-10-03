@@ -137,6 +137,7 @@ temp/
 # Next.js specific
 next-env.d.ts
 package-lock.json
+**/package-lock.json
 
 # Miscellaneous
 *.pem
