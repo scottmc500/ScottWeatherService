@@ -1,12 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',
-  trailingSlash: true,
+  // Firebase App Hosting supports full Next.js with SSR and API routes
+  // No need for static export - use full Next.js capabilities
   images: {
-    unoptimized: true,
     domains: ['lh3.googleusercontent.com', 'graph.microsoft.com']
-  }
+  },
+  // External packages for server components
+  serverExternalPackages: ['@google-cloud/firestore']
 };
 
 export default nextConfig;

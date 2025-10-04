@@ -7,11 +7,13 @@ import {
   User,
   getAdditionalUserInfo,
 } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Initialize providers
+// Initialize providers (Firebase Auth only - no calendar scopes)
 const googleProvider = new GoogleAuthProvider();
+// Note: Calendar scopes are handled separately via Google OAuth flow
+
 const microsoftProvider = new OAuthProvider('microsoft.com');
 
 // Configure Microsoft provider
@@ -35,23 +37,39 @@ export interface UserProfile {
 
 export class AuthService {
 
-  // Sign in with Google
+  // Sign in with Google (Firebase best practice)
   static async signInWithGoogle(): Promise<UserProfile> {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const additionalInfo = getAdditionalUserInfo(result);
       
+      console.log('✅ Firebase Google sign-in successful:', {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL
+      });
+      
+      // Firebase Auth is for authentication only - calendar tokens handled separately
+      console.log('✅ Firebase Auth completed - user authenticated');
+      
       // Check if this is a new user or existing user
+      let userProfile: UserProfile;
       if (additionalInfo?.isNewUser) {
         // New user - save profile
-        const userProfile = await this.saveUserProfile(user, 'google');
-        return userProfile;
+        userProfile = await this.saveUserProfile(user, 'google');
+        console.log('👤 New user profile created');
       } else {
         // Existing user - get existing profile
-        const userProfile = await this.getUserProfile(user.uid);
-        return userProfile || await this.saveUserProfile(user, 'google');
+        userProfile = await this.getUserProfile(user.uid) || await this.saveUserProfile(user, 'google');
+        console.log('👤 Existing user profile loaded');
       }
+
+      // Profile data comes from Firebase Auth - no additional API calls needed
+      console.log('👤 User profile ready with Firebase Auth data');
+      
+      return userProfile;
     } catch (error: unknown) {
       console.error('Google sign-in error:', error);
       
@@ -118,7 +136,7 @@ export class AuthService {
   }
 
   // Save user profile to Firestore
-  private static async saveUserProfile(user: User, provider: string): Promise<UserProfile> {
+  static async saveUserProfile(user: User, provider: string): Promise<UserProfile> {
     const userRef = doc(db, 'users', user.uid);
     
     // Check if user already exists
@@ -131,7 +149,7 @@ export class AuthService {
       displayName: user.displayName,
       photoURL: user.photoURL,
       provider,
-      createdAt: userSnap.exists() ? userSnap.data().createdAt.toDate() : now,
+      createdAt: userSnap.exists() && userSnap.data().createdAt ? userSnap.data().createdAt.toDate() : now,
       lastLogin: now,
       preferences: {
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -139,6 +157,14 @@ export class AuthService {
         notifications: true,
       },
     };
+    
+    console.log('💾 Saving user profile:', {
+      uid: userProfile.uid,
+      email: userProfile.email,
+      displayName: userProfile.displayName,
+      photoURL: userProfile.photoURL,
+      provider: userProfile.provider
+    });
 
     // Save to Firestore
     await setDoc(userRef, {
@@ -150,6 +176,20 @@ export class AuthService {
     return userProfile;
   }
 
+  // Create user profile from Firebase user data (fallback method)
+  static async createUserProfileFromFirebaseUser(firebaseUser: User): Promise<UserProfile | null> {
+    try {
+      console.log('🔧 Creating user profile from Firebase user data...');
+      const userProfile = await this.saveUserProfile(firebaseUser, 'google');
+      console.log('✅ User profile created successfully:', userProfile);
+      return userProfile;
+    } catch (error) {
+      console.error('❌ Error creating user profile from Firebase user:', error);
+      return null;
+    }
+  }
+
+
   // Get user profile from Firestore
   static async getUserProfile(uid: string): Promise<UserProfile | null> {
     try {
@@ -158,11 +198,23 @@ export class AuthService {
       
       if (userSnap.exists()) {
         const data = userSnap.data();
-        return {
+        console.log('📋 Retrieved user profile data:', {
+          uid: data.uid,
+          email: data.email,
+          displayName: data.displayName,
+          photoURL: data.photoURL,
+          provider: data.provider
+        });
+        console.log('📋 Raw Firestore data:', data);
+        
+        const userProfile = {
           ...data,
-          createdAt: data.createdAt.toDate(),
-          lastLogin: data.lastLogin.toDate(),
+          createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+          lastLogin: data.lastLogin ? data.lastLogin.toDate() : new Date(),
         } as UserProfile;
+        
+        console.log('📋 Processed user profile:', userProfile);
+        return userProfile;
       }
       return null;
     } catch (error) {
@@ -183,6 +235,47 @@ export class AuthService {
   static isProviderLinked(providerId: string): boolean {
     const linkedProviders = this.getLinkedProviders();
     return linkedProviders.includes(providerId);
+  }
+
+  // Store Google Calendar OAuth tokens in Firestore
+  static async storeGoogleCalendarTokens(userId: string, tokens: {
+    access_token: string;
+    id_token?: string;
+    refresh_token?: string;
+    scope: string;
+  }): Promise<void> {
+    try {
+      // Prepare token data, excluding undefined values
+      const tokenData: {
+        access_token: string;
+        scope: string;
+        type: string;
+        lastUpdated: string;
+        id_token?: string;
+        refresh_token?: string;
+      } = {
+        access_token: tokens.access_token,
+        scope: tokens.scope,
+        type: 'oauth_token',
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Only add optional fields if they exist
+      if (tokens.id_token) {
+        tokenData.id_token = tokens.id_token;
+      }
+      if (tokens.refresh_token) {
+        tokenData.refresh_token = tokens.refresh_token;
+      }
+
+      await setDoc(doc(db, 'users', userId), {
+        googleCalendarToken: tokenData
+      }, { merge: true });
+      
+      console.log(`Stored Google Calendar tokens for user ${userId}`);
+    } catch (error) {
+      console.error('Error storing Google Calendar tokens:', error);
+    }
   }
 
 }

@@ -6,6 +6,8 @@ module.exports = {
   },
   extends: [
     "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "google",
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
@@ -22,10 +24,5 @@ module.exports = {
   rules: {
     "quotes": ["error", "double"],
     "indent": ["error", 2],
-    "max-len": ["error", { "code": 100 }], // Increased from 80 to 100
-    "@typescript-eslint/no-unused-vars": ["warn", { 
-      "argsIgnorePattern": "^_",
-      "varsIgnorePattern": "^_" 
-    }],
   },
 };

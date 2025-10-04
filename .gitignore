@@ -5,11 +5,23 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnp
+.pnp.*
+
 # Next.js
 .next/
 out/
 build/
 dist/
+
+# Testing
+/coverage
 
 # Production builds
 *.tgz
@@ -30,6 +42,10 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.env*
+
+# Vercel
+.vercel
 
 # Logs
 logs
@@ -42,6 +58,10 @@ nextjs-dev.log
 # Firebase
 .firebase/
 firestore-debug.log
+
+# Firebase Functions compiled files
+functions/lib/
+functions/*.local
 
 # Python
 __pycache__/
@@ -113,3 +133,11 @@ Thumbs.db
 # Temporary folders
 tmp/
 temp/
+
+# Next.js specific
+next-env.d.ts
+package-lock.json
+**/package-lock.json
+
+# Miscellaneous
+*.pem

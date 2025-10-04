@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AuthService, UserProfile } from '../services/auth';
+import { AuthService, UserProfile } from '@/services/auth';
 import { Cloud, Mail } from 'lucide-react';
 
 interface LoginFormProps {

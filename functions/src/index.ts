@@ -1,326 +1,578 @@
+import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
+import {onCall} from "firebase-functions/v2/https";
+import * as logger from "firebase-functions/logger";
+import {google} from "googleapis";
+import axios from "axios";
+import {defineSecret} from "firebase-functions/params";
+import {initializeApp} from "firebase-admin/app";
+import {getFirestore} from "firebase-admin/firestore";
 
-// Initialize Firebase Admin
-admin.initializeApp();
+// Initialize Firebase Admin for Firestore caching
+initializeApp();
+const db = getFirestore();
 
-// Weather API endpoints
-export const weatherApi = onRequest(
-  {
-    memory: "512MiB",
-    timeoutSeconds: 30,
-    maxInstances: 10,
-    cors: true,
-  },
-  async (req, res) => {
-    try {
-      // Set CORS headers - SECURE: Only allow specific origins
-      const origin = req.headers.origin;
-      const allowedOrigins = [
-        "http://localhost:3000",
-        "https://scott-weather-service.web.app",
-        "https://scott-weather-service.firebaseapp.com"
-      ];
-      
-      if (origin && allowedOrigins.includes(origin)) {
-        res.set("Access-Control-Allow-Origin", origin);
-      } else {
-        // Reject requests from unauthorized origins
-        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
-        return;
-      }
-      res.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+// Set global options for cost control
+setGlobalOptions({ maxInstances: 10 });
 
-      if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-      }
+// Define secrets
+const weatherApiKey = defineSecret("weather_api_key");
 
-      const {method} = req;
-      const {location, date} = req.query;
+// In-memory cache for weather data (5-10 minute cache)
+const weatherCache = new Map<string, {data: any; timestamp: number; ttl: number}>();
 
-      switch (method) {
-      case "GET":
-        if (req.path === "/current") {
-          const weatherData = await getCurrentWeather(location as string);
-          res.json(weatherData);
-        } else if (req.path === "/forecast") {
-          const forecastData = await getWeatherForecast(
-            location as string, date as string);
-          res.json(forecastData);
-        } else {
-          res.status(404).json({error: "Endpoint not found"});
-        }
-        break;
-      default:
-        res.status(405).json({error: "Method not allowed"});
-      }
-    } catch (error) {
-      console.error("Weather API error:", error);
-      res.status(500).json({error: "Internal server error"});
-    }
+// Cache configuration
+const CACHE_TTL = {
+  CURRENT_WEATHER: 5 * 60 * 1000, // 5 minutes
+  FORECAST: 10 * 60 * 1000, // 10 minutes
+  LOCATION: 60 * 60 * 1000, // 1 hour (location rarely changes)
+  FIRESTORE_CACHE: 30 * 60 * 1000, // 30 minutes
+};
+
+// Helper function to generate cache key
+function getCacheKey(type: string, latitude: number, longitude: number, units: string): string {
+  return `${type}:${Math.round(latitude * 1000) / 1000}:${Math.round(longitude * 1000) / 1000}:${units}`;
+}
+
+// Helper function to generate location cache key (no units needed)
+function getLocationCacheKey(latitude: number, longitude: number): string {
+  return `location:${Math.round(latitude * 1000) / 1000}:${Math.round(longitude * 1000) / 1000}`;
+}
+
+// Helper function to check if cache is valid
+function isCacheValid(timestamp: number, ttl: number): boolean {
+  return Date.now() - timestamp < ttl;
+}
+
+// Helper function to get cached data
+async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<any | null> {
+  // Check in-memory cache first
+  const memoryCache = weatherCache.get(cacheKey);
+  if (memoryCache && isCacheValid(memoryCache.timestamp, memoryCache.ttl)) {
+    logger.info(`Cache hit (memory): ${cacheKey}`);
+    return memoryCache.data;
   }
-);
 
-// Calendar API endpoints
-export const calendarApi = onRequest(
-  {
-    memory: "512MiB",
-    timeoutSeconds: 30,
-    maxInstances: 10,
-    cors: true,
-  },
-  async (req, res) => {
-    try {
-      // Set CORS headers - SECURE: Only allow specific origins
-      const origin = req.headers.origin;
-      const allowedOrigins = [
-        "http://localhost:3000",
-        "https://scott-weather-service.web.app",
-        "https://scott-weather-service.firebaseapp.com"
-      ];
-      
-      if (origin && allowedOrigins.includes(origin)) {
-        res.set("Access-Control-Allow-Origin", origin);
-      } else {
-        // Reject requests from unauthorized origins
-        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
-        return;
+  // Check Firestore cache
+  try {
+    const doc = await db.collection('weather_cache').doc(cacheKey).get();
+    if (doc.exists) {
+      const cacheData = doc.data();
+      if (cacheData && isCacheValid(cacheData.timestamp, ttl)) {
+        logger.info(`Cache hit (firestore): ${cacheKey}`);
+        // Update memory cache
+        weatherCache.set(cacheKey, {
+          data: cacheData.data,
+          timestamp: cacheData.timestamp,
+          ttl: ttl
+        });
+        return cacheData.data;
       }
-      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-      if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-      }
-
-      const {method} = req;
-      const authHeader = req.headers.authorization;
-
-      if (!authHeader) {
-        res.status(401).json({error: "Authorization header required"});
-        return;
-      }
-
-      switch (method) {
-      case "GET":
-        if (req.path === "/events") {
-          const events = await getCalendarEvents(authHeader);
-          res.json(events);
-        } else {
-          res.status(404).json({error: "Endpoint not found"});
-        }
-        break;
-      default:
-        res.status(405).json({error: "Method not allowed"});
-      }
-    } catch (error) {
-      console.error("Calendar API error:", error);
-      res.status(500).json({error: "Internal server error"});
     }
+  } catch (error) {
+    logger.warn('Firestore cache read failed:', error);
   }
-);
 
-// Recommendations API
-export const recommendationsApi = onRequest(
-  {
-    memory: "1GiB",
-    timeoutSeconds: 30,
-    maxInstances: 10,
-    cors: true,
-  },
-  async (req, res) => {
-    try {
-      // Set CORS headers - SECURE: Only allow specific origins
-      const origin = req.headers.origin;
-      const allowedOrigins = [
-        "http://localhost:3000",
-        "https://scott-weather-service.web.app",
-        "https://scott-weather-service.firebaseapp.com"
-      ];
+  return null;
+}
+
+// Helper function to set cached data
+async function setCachedWeatherData(cacheKey: string, data: any, ttl: number): Promise<void> {
+  const timestamp = Date.now();
+  
+  // Update memory cache
+  weatherCache.set(cacheKey, { data, timestamp, ttl });
+  
+  // Update Firestore cache (with longer TTL for backup)
+  try {
+    await db.collection('weather_cache').doc(cacheKey).set({
+      data,
+      timestamp,
+      ttl: CACHE_TTL.FIRESTORE_CACHE
+    });
+    logger.info(`Cache set: ${cacheKey}`);
+  } catch (error) {
+    logger.warn('Firestore cache write failed:', error);
+  }
+}
+
+// Helper function to get detailed location information using reverse geocoding
+async function getDetailedLocation(latitude: number, longitude: number, apiKey: string): Promise<string> {
+  // Check cache first
+  const locationCacheKey = getLocationCacheKey(latitude, longitude);
+  const cachedLocation = await getCachedWeatherData(locationCacheKey, CACHE_TTL.LOCATION);
+  
+  if (cachedLocation) {
+    logger.info(`Cache hit (location): ${locationCacheKey}`);
+    return cachedLocation;
+  }
+
+  try {
+    // Use OpenWeatherMap's reverse geocoding API
+    const url = `http://api.openweathermap.org/geo/1.0/reverse`;
+    const params = {
+      lat: latitude,
+      lon: longitude,
+      limit: 1,
+      appid: apiKey,
+    };
+
+    const response = await axios.get(url, {params});
+    const data = response.data;
+
+    if (data && data.length > 0) {
+      const location = data[0];
+      const parts = [location.name]; // City name
       
-      if (origin && allowedOrigins.includes(origin)) {
-        res.set("Access-Control-Allow-Origin", origin);
-      } else {
-        // Reject requests from unauthorized origins
-        res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
-        return;
+      // Add state/province if available
+      if (location.state) {
+        parts.push(location.state);
       }
-      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-      if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-      }
-
-      const {method} = req;
-      const authHeader = req.headers.authorization;
-
-      if (!authHeader) {
-        res.status(401).json({error: "Authorization header required"});
-        return;
-      }
-
-      switch (method) {
-      case "GET": {
-        const recommendations = await generateRecommendations(authHeader);
-        res.json(recommendations);
-        break;
-      }
-      default:
-        res.status(405).json({error: "Method not allowed"});
-      }
-    } catch (error) {
-      console.error("Recommendations API error:", error);
-      res.status(500).json({error: "Internal server error"});
+      
+      // Add country
+      parts.push(location.country);
+      
+      const detailedLocation = parts.join(', ');
+      
+      // Cache the location data
+      await setCachedWeatherData(locationCacheKey, detailedLocation, CACHE_TTL.LOCATION);
+      
+      logger.info(`Cached location data: ${detailedLocation}`);
+      return detailedLocation;
     }
+  } catch (error) {
+    logger.warn('Reverse geocoding failed:', error);
   }
-);
+  
+  // Fallback to basic location format
+  const fallbackLocation = `Lat: ${latitude.toFixed(2)}, Lon: ${longitude.toFixed(2)}`;
+  
+  // Cache the fallback as well (shorter TTL)
+  await setCachedWeatherData(locationCacheKey, fallbackLocation, CACHE_TTL.LOCATION);
+  
+  return fallbackLocation;
+}
 
-// Helper functions
-/**
- * Get current weather data for a location
- * @param {string} location - The location to get weather for
- * @return {Promise<Object>} Weather data object
- */
-async function getCurrentWeather(location: string) {
-  // Mock weather data - replace with real weather API
-  const weatherData = {
-    location: location || "San Francisco, CA",
-    temperature: 72,
-    condition: "Sunny",
-    humidity: 65,
-    windSpeed: 5,
-    windDirection: "NW",
-    uvIndex: 7,
-    feelsLike: 75,
-    timestamp: new Date().toISOString(),
+// Types for our functions
+interface CalendarRequest {
+  accessToken: string;
+  calendarId?: string;
+  timeMin?: string;
+  timeMax?: string;
+  maxResults?: number;
+}
+
+interface WeatherRequest {
+  latitude: number;
+  longitude: number;
+  units?: "metric" | "imperial";
+}
+
+interface ForecastRequest {
+  latitude: number;
+  longitude: number;
+  units?: "metric" | "imperial";
+}
+
+interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: {
+    dateTime?: string | null;
+    date?: string | null;
   };
+  end: {
+    dateTime?: string | null;
+    date?: string | null;
+  };
+  location?: string | null;
+  description?: string | null;
+}
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
+interface WeatherData {
+  temperature: number;
+  condition: string;
+  humidity: number;
+  windSpeed: number;
+  windDirection: string;
+  pressure: number;
+  location: string;
+  timestamp: string;
+}
 
-  return weatherData;
+interface ForecastDay {
+  date: string;
+  dayName: string;
+  highTemp: number;
+  lowTemp: number;
+  condition: string;
+  icon: string;
+  humidity: number;
+  windSpeed: number;
+  windDirection: string;
+  pressure: number;
+  precipitation: number;
+}
+
+interface ForecastData {
+  location: string;
+  days: ForecastDay[];
 }
 
 /**
- * Get weather forecast for a location
- * @param {string} location - The location to get forecast for
- * @param {string} date - Optional date for forecast
- * @return {Promise<Object>} Forecast data object
+ * Calendar Function - Retrieves events from Google Calendar
  */
-async function getWeatherForecast(location: string, date?: string) {
-  // Mock forecast data - replace with real weather API
-  const forecast = [
-    {
-      date: date || new Date().toISOString().split("T")[0],
-      high: 78,
-      low: 62,
-      condition: "Partly Cloudy",
-      precipitation: 10,
-      windSpeed: 7,
-    },
-    {
-      date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
-      high: 82,
-      low: 64,
-      condition: "Sunny",
-      precipitation: 0,
-      windSpeed: 5,
-    },
-    {
-      date: new Date(Date.now() + 172800000).toISOString().split("T")[0],
-      high: 75,
-      low: 58,
-      condition: "Rainy",
-      precipitation: 80,
-      windSpeed: 12,
-    },
-  ];
+export const getCalendarEvents = onCall<CalendarRequest>(
+  {cors: true},
+  async (request) => {
+    try {
+      const {accessToken, calendarId = "primary", timeMin, timeMax, maxResults = 10} = request.data;
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 150));
+      if (!accessToken) {
+        throw new Error("Access token is required");
+      }
 
-  return {location, forecast};
-}
+      // Initialize Google Calendar API
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({access_token: accessToken});
+
+      const calendar = google.calendar({version: "v3", auth});
+
+      // Prepare parameters
+      const params: any = {
+        calendarId,
+        maxResults,
+        singleEvents: true,
+        orderBy: "startTime",
+      };
+
+      if (timeMin) params.timeMin = timeMin;
+      if (timeMax) params.timeMax = timeMax;
+
+      // Fetch events
+      const response = await calendar.events.list(params);
+      const events = response.data.items || [];
+
+      // Transform events to our format
+      const formattedEvents: CalendarEvent[] = events.map((event) => ({
+        id: event.id || "",
+        summary: event.summary || "No title",
+        start: {
+          dateTime: event.start?.dateTime,
+          date: event.start?.date,
+        },
+        end: {
+          dateTime: event.end?.dateTime,
+          date: event.end?.date,
+        },
+        location: event.location,
+        description: event.description,
+      }));
+
+      logger.info(`Retrieved ${formattedEvents.length} calendar events`);
+
+      return {
+        success: true,
+        events: formattedEvents,
+        count: formattedEvents.length,
+      };
+    } catch (error) {
+      logger.error("Error fetching calendar events:", error);
+      throw new Error(`Failed to fetch calendar events: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+);
 
 /**
- * Get calendar events (mock implementation)
- * @param {string} authHeader - Authorization header
- * @return {Promise<Object>} Calendar events object
+ * Weather Function - Retrieves weather data based on location
  */
-async function getCalendarEvents(authHeader: string) {
-  // Mock calendar data - replace with real Google/Microsoft Calendar API
-  // Note: authHeader is available for future calendar API integration
-  console.log("Auth header provided:", authHeader ? "Yes" : "No");
-  const events = [
-    {
-      id: "1",
-      title: "Team Meeting",
-      start: new Date(Date.now() + 3600000).toISOString(),
-      end: new Date(Date.now() + 7200000).toISOString(),
-      location: "Office",
-      description: "Weekly team standup",
-    },
-    {
-      id: "2",
-      title: "Lunch with Client",
-      start: new Date(Date.now() + 86400000).toISOString(),
-      end: new Date(Date.now() + 90000000).toISOString(),
-      location: "Downtown Restaurant",
-      description: "Discuss project requirements",
-    },
-  ];
+export const getWeatherData = onCall<WeatherRequest>(
+  {
+    cors: true,
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    secrets: [weatherApiKey],
+  },
+  async (request) => {
+    try {
+      const {latitude, longitude, units = "metric"} = request.data;
 
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
+      if (!latitude || !longitude) {
+        throw new Error("Latitude and longitude are required");
+      }
 
-  return {events};
-}
+      // Check cache first
+      const cacheKey = getCacheKey('current', latitude, longitude, units);
+      const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.CURRENT_WEATHER);
+      
+      if (cachedData) {
+        logger.info(`Returning cached weather data for ${cachedData.location}`);
+        return {
+          success: true,
+          data: cachedData,
+          cached: true,
+        };
+      }
+
+      // Get API key from Firebase Secret Manager or environment variable
+      let apiKey: string;
+      try {
+        apiKey = weatherApiKey.value().trim();
+        logger.info("Using secret manager API key");
+      } catch (error) {
+        // Fallback to environment variable for local development
+        logger.info("Secret not available, trying environment variable");
+        apiKey = process.env.WEATHER_API_KEY || "";
+      }
+      
+      let data: any;
+      
+      if (!apiKey) {
+        // Return mock data for local development/testing
+        logger.info("No weather API key found, returning mock data");
+        data = {
+          main: {
+            temp: 22,
+            humidity: 65
+          },
+          weather: [{
+            description: "sunny"
+          }],
+          wind: {
+            speed: 3.2
+          },
+          name: "San Francisco",
+          sys: {
+            country: "US"
+          }
+        };
+      } else {
+        // Use OpenWeatherMap API
+        logger.info("Calling OpenWeatherMap API with real data");
+        const url = `https://api.openweathermap.org/data/2.5/weather`;
+        const params = {
+          lat: latitude,
+          lon: longitude,
+          appid: apiKey.trim(),
+          units: units || "metric",
+        };
+
+        const response = await axios.get(url, {params});
+        data = response.data;
+      }
+
+      // Helper function to convert wind degrees to direction
+      const getWindDirection = (degrees: number): string => {
+        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const index = Math.round(degrees / 22.5) % 16;
+        return directions[index];
+      };
+
+      // Convert pressure based on units
+      const pressureInHPa = data.main.pressure;
+      const convertedPressure = units === 'imperial' 
+        ? Math.round((pressureInHPa * 0.02953) * 100) / 100 // Convert hPa to inHg
+        : Math.round(pressureInHPa); // Keep hPa for metric
+
+      // Get detailed location information
+      const detailedLocation = apiKey ? 
+        await getDetailedLocation(latitude, longitude, apiKey) : 
+        `${data.name}, ${data.sys.country}`;
+
+      // Transform weather data to our format
+      const weatherData: WeatherData = {
+        temperature: Math.round(data.main.temp),
+        condition: data.weather[0].description,
+        humidity: data.main.humidity,
+        windSpeed: data.wind.speed,
+        windDirection: data.wind.deg ? getWindDirection(data.wind.deg) : 'N/A',
+        pressure: convertedPressure,
+        location: detailedLocation,
+        timestamp: new Date().toISOString(),
+      };
+
+      logger.info(`Retrieved weather data for ${weatherData.location}`);
+
+      // Cache the data
+      await setCachedWeatherData(cacheKey, weatherData, CACHE_TTL.CURRENT_WEATHER);
+
+      return {
+        success: true,
+        data: weatherData,
+        cached: false,
+      };
+    } catch (error) {
+      logger.error("Error fetching weather data:", error);
+      throw new Error(`Failed to fetch weather data: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+);
 
 /**
- * Generate AI recommendations (mock implementation)
- * @param {string} authHeader - Authorization header
- * @return {Promise<Object>} Recommendations object
+ * Weather Forecast Function - Retrieves 5-day weather forecast
  */
-async function generateRecommendations(authHeader: string) {
-  // Mock recommendations - replace with AI/ML logic
-  // Note: authHeader is available for future user-specific recommendations
-  console.log("Auth header provided:", authHeader ? "Yes" : "No");
-  const recommendations = [
-    {
-      id: "1",
-      type: "weather",
-      title: "Bring an umbrella",
-      description: "There's a 80% chance of rain tomorrow during " +
-        "your outdoor meeting.",
-      priority: "high",
-      action: "Check weather before leaving",
-    },
-    {
-      id: "2",
-      type: "calendar",
-      title: "Reschedule outdoor event",
-      description: "Your park meeting on Friday conflicts with " +
-        "expected thunderstorms.",
-      priority: "medium",
-      action: "Consider indoor alternative",
-    },
-    {
-      id: "3",
-      type: "clothing",
-      title: "Dress warmly",
-      description: "Temperature will drop to 58°F by evening.",
-      priority: "low",
-      action: "Bring a jacket",
-    },
-  ];
+export const getWeatherForecast = onCall<ForecastRequest>(
+  {
+    cors: true,
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    secrets: [weatherApiKey],
+  },
+  async (request) => {
+    try {
+      const {latitude, longitude, units = "metric"} = request.data;
 
-  // Simulate processing delay
-  await new Promise((resolve) => setTimeout(resolve, 300));
+      if (!latitude || !longitude) {
+        throw new Error("Latitude and longitude are required");
+      }
 
-  return {recommendations};
-}
+      // Check cache first
+      const cacheKey = getCacheKey('forecast', latitude, longitude, units);
+      const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.FORECAST);
+      
+      if (cachedData) {
+        logger.info(`Returning cached forecast data for ${cachedData.location}`);
+        return {
+          success: true,
+          data: cachedData,
+          cached: true,
+        };
+      }
+
+      // Get API key from Firebase Secret Manager or environment variable
+      let apiKey: string;
+      try {
+        apiKey = weatherApiKey.value();
+        logger.info("Using secret manager API key for forecast");
+      } catch (error) {
+        // Fallback to environment variable for local development
+        logger.info("Secret not available, trying environment variable for forecast");
+        apiKey = process.env.WEATHER_API_KEY || "";
+      }
+      
+      let data: any;
+      
+      if (!apiKey) {
+        // Return mock data for local development/testing
+        logger.info("No weather API key found, returning mock forecast data");
+        data = {
+          city: { name: "San Francisco", country: "US" },
+          list: [
+            {
+              dt: Date.now() / 1000,
+              main: { temp: 22, temp_min: 18, temp_max: 25, humidity: 65, pressure: 1013 },
+              weather: [{ description: "sunny", icon: "01d" }],
+              wind: { speed: 3.2, deg: 180 },
+              pop: 0
+            }
+          ]
+        };
+      } else {
+        // Use OpenWeatherMap 5-day forecast API
+        logger.info("Calling OpenWeatherMap forecast API");
+        const url = `https://api.openweathermap.org/data/2.5/forecast`;
+        const params = {
+          lat: latitude,
+          lon: longitude,
+          appid: apiKey.trim(),
+          units: units || "metric",
+        };
+
+        const response = await axios.get(url, {params});
+        data = response.data;
+      }
+
+      // Helper function to convert wind degrees to direction
+      const getWindDirection = (degrees: number): string => {
+        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const index = Math.round(degrees / 22.5) % 16;
+        return directions[index];
+      };
+
+      // Group forecast data by day and find high/low temps
+      const dailyData: { [key: string]: any[] } = {};
+      
+      data.list.forEach((item: any) => {
+        const date = new Date(item.dt * 1000).toDateString();
+        if (!dailyData[date]) {
+          dailyData[date] = [];
+        }
+        dailyData[date].push(item);
+      });
+
+      // Convert to our format - take first 5 days
+      const forecastDays: ForecastDay[] = Object.keys(dailyData)
+        .slice(0, 5)
+        .map(dateStr => {
+          const dayData = dailyData[dateStr];
+          const date = new Date(dateStr);
+          
+          // Find high and low temps for the day
+          const temps = dayData.map((item: any) => item.main.temp);
+          const highTemp = Math.round(Math.max(...temps));
+          const lowTemp = Math.round(Math.min(...temps));
+          
+          // Use midday data (around 12pm) for condition and other details
+          const middayData = dayData.find((item: any) => {
+            const hour = new Date(item.dt * 1000).getHours();
+            return hour >= 10 && hour <= 14;
+          }) || dayData[Math.floor(dayData.length / 2)];
+          
+          // Convert pressure based on units
+          const pressureInHPa = middayData.main.pressure;
+          const convertedPressure = units === 'imperial' 
+            ? Math.round((pressureInHPa * 0.02953) * 100) / 100
+            : Math.round(pressureInHPa);
+
+          return {
+            date: date.toISOString().split('T')[0],
+            dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+            highTemp,
+            lowTemp,
+            condition: middayData.weather[0].description,
+            icon: middayData.weather[0].icon,
+            humidity: Math.round(middayData.main.humidity),
+            windSpeed: Math.round(middayData.wind.speed * 10) / 10,
+            windDirection: getWindDirection(middayData.wind.deg),
+            pressure: convertedPressure,
+            precipitation: Math.round((middayData.pop || 0) * 100),
+          };
+        });
+
+      // Get detailed location information for forecast
+      const detailedLocation = apiKey ? 
+        await getDetailedLocation(latitude, longitude, apiKey) : 
+        `${data.city.name}, ${data.city.country}`;
+
+      const forecastData: ForecastData = {
+        location: detailedLocation,
+        days: forecastDays,
+      };
+
+      logger.info(`Retrieved 5-day forecast for ${forecastData.location}`);
+
+      // Cache the data
+      await setCachedWeatherData(cacheKey, forecastData, CACHE_TTL.FORECAST);
+
+      return {
+        success: true,
+        data: forecastData,
+        cached: false,
+      };
+    } catch (error) {
+      logger.error("Error fetching weather forecast:", error);
+      throw new Error(`Failed to fetch weather forecast: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+);
+
+/**
+ * Health check endpoint
+ */
+export const healthCheck = onRequest((request, response) => {
+  response.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    functions: ["getCalendarEvents", "getWeatherData"],
+  });
+});
