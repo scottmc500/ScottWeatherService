@@ -21,10 +21,10 @@ const weatherApiKey = defineSecret("weather_api_key");
 // In-memory cache for weather data (5-10 minute cache)
 const weatherCache = new Map<string, {data: any; timestamp: number; ttl: number}>();
 
-// Cache configuration
+// Cache configuration - temporarily reduced for debugging
 const CACHE_TTL = {
-  CURRENT_WEATHER: 5 * 60 * 1000, // 5 minutes
-  FORECAST: 10 * 60 * 1000, // 10 minutes
+  CURRENT_WEATHER: 1 * 60 * 1000, // 1 minute (temporarily reduced)
+  FORECAST: 1 * 60 * 1000, // 1 minute (temporarily reduced)
   LOCATION: 60 * 60 * 1000, // 1 hour (location rarely changes)
   FIRESTORE_CACHE: 30 * 60 * 1000, // 30 minutes
 };
@@ -455,17 +455,37 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       if (!apiKey) {
         // Return mock data for local development/testing
         logger.info("No weather API key found, returning mock forecast data");
+        
+        // Generate mock data for the next 5 days starting from today
+        const mockList = [];
+        const today = new Date();
+        
+        for (let i = 0; i < 5; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + i);
+          date.setHours(12, 0, 0, 0); // Set to noon for consistent data
+          
+          mockList.push({
+            dt: Math.floor(date.getTime() / 1000),
+            main: { 
+              temp: 22 + (i * 2), // Vary temperature slightly
+              temp_min: 18 + (i * 2), 
+              temp_max: 25 + (i * 2), 
+              humidity: 65 - (i * 5), 
+              pressure: 1013 
+            },
+            weather: [{ 
+              description: i % 2 === 0 ? "sunny" : "partly cloudy", 
+              icon: i % 2 === 0 ? "01d" : "02d" 
+            }],
+            wind: { speed: 3.2 + (i * 0.5), deg: 180 + (i * 30) },
+            pop: i === 2 ? 0.3 : 0 // Add some precipitation on day 3
+          });
+        }
+        
         data = {
-          city: { name: "San Francisco", country: "US" },
-          list: [
-            {
-              dt: Date.now() / 1000,
-              main: { temp: 22, temp_min: 18, temp_max: 25, humidity: 65, pressure: 1013 },
-              weather: [{ description: "sunny", icon: "01d" }],
-              wind: { speed: 3.2, deg: 180 },
-              pop: 0
-            }
-          ]
+          city: { name: "San Francisco", country: "US", timezone: -28800 }, // PST timezone offset
+          list: mockList
         };
       } else {
         // Use OpenWeatherMap 5-day forecast API
@@ -493,19 +513,28 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       const dailyData: { [key: string]: any[] } = {};
       
       data.list.forEach((item: any) => {
-        const date = new Date(item.dt * 1000).toDateString();
+        // Use the timezone offset from the API response to get correct local date
+        const timezoneOffset = data.city.timezone || 0; // timezone offset in seconds
+        const localTime = new Date((item.dt + timezoneOffset) * 1000);
+        const date = localTime.toDateString();
         if (!dailyData[date]) {
           dailyData[date] = [];
         }
         dailyData[date].push(item);
       });
 
-      // Convert to our format - take first 5 days
+      // Convert to our format - take first 5 days, but filter out past dates
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      
       const forecastDays: ForecastDay[] = Object.keys(dailyData)
+        .filter(dateStr => {
+          const date = new Date(dateStr);
+          return date >= today; // Only include today and future dates
+        })
         .slice(0, 5)
         .map(dateStr => {
           const dayData = dailyData[dateStr];
-          const date = new Date(dateStr);
           
           // Find high and low temps for the day
           const temps = dayData.map((item: any) => item.main.temp);
@@ -524,9 +553,23 @@ export const getWeatherForecast = onCall<ForecastRequest>(
             ? Math.round((pressureInHPa * 0.02953) * 100) / 100
             : Math.round(pressureInHPa);
 
+          // Use the same timezone-aware date for both date and dayName
+          const timezoneOffset = data.city.timezone || 0;
+          const localDate = new Date((middayData.dt + timezoneOffset) * 1000);
+
+          // Debug logging
+          logger.info("Forecast day processing:", {
+            originalDt: middayData.dt,
+            timezoneOffset,
+            localDate: localDate.toISOString(),
+            dateString: localDate.toISOString().split("T")[0],
+            dayName: localDate.toLocaleDateString("en-US", { weekday: "long" }),
+            today: new Date().toISOString().split("T")[0]
+          });
+
           return {
-            date: date.toISOString().split("T")[0],
-            dayName: date.toLocaleDateString("en-US", { weekday: "long" }),
+            date: localDate.toISOString().split("T")[0], // Use timezone-aware date
+            dayName: localDate.toLocaleDateString("en-US", { weekday: "long" }),
             highTemp,
             lowTemp,
             condition: middayData.weather[0].description,

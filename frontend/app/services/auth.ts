@@ -3,22 +3,15 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  OAuthProvider,
   User,
   getAdditionalUserInfo,
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-// Initialize providers (Firebase Auth only - no calendar scopes)
+// Initialize Google provider (Firebase Auth only - no calendar scopes)
 const googleProvider = new GoogleAuthProvider();
 // Note: Calendar scopes are handled separately via Google OAuth flow
-
-const microsoftProvider = new OAuthProvider('microsoft.com');
-
-// Configure Microsoft provider
-microsoftProvider.addScope('https://graph.microsoft.com/Calendars.Read');
-microsoftProvider.addScope('https://graph.microsoft.com/User.Read');
 
 export interface UserProfile {
   uid: string;
@@ -75,41 +68,13 @@ export class AuthService {
       
       // Handle account exists with different credential error
       if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/account-exists-with-different-credential') {
-        throw new Error('This email is already associated with a Microsoft account. Please sign in with Microsoft instead. Account linking with the same email address is not supported by Firebase.');
+        throw new Error('This email is already associated with a different account. Please try a different email address or contact support.');
       }
       
       throw error;
     }
   }
 
-  // Sign in with Microsoft
-  static async signInWithMicrosoft(): Promise<UserProfile> {
-    try {
-      const result = await signInWithPopup(auth, microsoftProvider);
-      const user = result.user;
-      const additionalInfo = getAdditionalUserInfo(result);
-      
-      // Check if this is a new user or existing user
-      if (additionalInfo?.isNewUser) {
-        // New user - save profile
-        const userProfile = await this.saveUserProfile(user, 'microsoft');
-        return userProfile;
-      } else {
-        // Existing user - get existing profile
-        const userProfile = await this.getUserProfile(user.uid);
-        return userProfile || await this.saveUserProfile(user, 'microsoft');
-      }
-    } catch (error: unknown) {
-      console.error('Microsoft sign-in error:', error);
-      
-      // Handle account exists with different credential error
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'auth/account-exists-with-different-credential') {
-        throw new Error('This email is already associated with a Google account. Please sign in with Google instead. Account linking with the same email address is not supported by Firebase.');
-      }
-      
-      throw error;
-    }
-  }
 
 
   // Sign out

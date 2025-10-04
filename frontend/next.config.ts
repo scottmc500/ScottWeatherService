@@ -5,7 +5,14 @@ const nextConfig: NextConfig = {
   // Firebase App Hosting supports full Next.js with SSR and API routes
   // No need for static export - use full Next.js capabilities
   images: {
-    domains: ['lh3.googleusercontent.com', 'graph.microsoft.com']
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
+    ],
   },
   // External packages for server components
   serverExternalPackages: ['@google-cloud/firestore'],

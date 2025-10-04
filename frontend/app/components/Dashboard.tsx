@@ -36,33 +36,67 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   });
 
   const loadOverviewData = useCallback(async () => {
-    setLoading(prev => ({ ...prev, weather: true, calendar: true }));
+    setLoading(prev => ({ ...prev, weather: true, forecast: true, calendar: true }));
     try {
       // Get user's location for weather data
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             try {
-              const weather = await ApiService.weather.getCurrentWeather(
-                position.coords.latitude,
-                position.coords.longitude,
-                units
-              );
+              // Load both weather and forecast data with the same location
+              const [weather, forecast] = await Promise.all([
+                ApiService.weather.getCurrentWeather(
+                  position.coords.latitude,
+                  position.coords.longitude,
+                  units
+                ),
+                ApiService.weather.getWeatherForecast(
+                  position.coords.latitude,
+                  position.coords.longitude,
+                  units
+                )
+              ]);
               setWeatherData(weather);
+              setForecastData(forecast);
             } catch (error) {
               console.error('Error loading weather data:', error);
             } finally {
-              setLoading(prev => ({ ...prev, weather: false }));
+              setLoading(prev => ({ ...prev, weather: false, forecast: false }));
             }
           },
           (error) => {
             console.error('Error getting location:', error);
-            setLoading(prev => ({ ...prev, weather: false }));
+            // Fallback to San Francisco coordinates if location fails
+            console.log('Using fallback location (San Francisco)');
+            Promise.all([
+              ApiService.weather.getCurrentWeather(
+                37.7749, // San Francisco latitude
+                -122.4194, // San Francisco longitude
+                units
+              ),
+              ApiService.weather.getWeatherForecast(
+                37.7749, // San Francisco latitude
+                -122.4194, // San Francisco longitude
+                units
+              )
+            ]).then(([weather, forecast]) => {
+              setWeatherData(weather);
+              setForecastData(forecast);
+            }).catch(fallbackError => {
+              console.error('Error loading fallback weather:', fallbackError);
+            }).finally(() => {
+              setLoading(prev => ({ ...prev, weather: false, forecast: false }));
+            });
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 10000, // 10 second timeout
+            maximumAge: 300000 // 5 minute cache
           }
         );
       } else {
         console.error('Geolocation is not supported by this browser.');
-        setLoading(prev => ({ ...prev, weather: false }));
+        setLoading(prev => ({ ...prev, weather: false, forecast: false }));
       }
       
       // Load calendar data for overview (will need Google Calendar token)
@@ -70,43 +104,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       setLoading(prev => ({ ...prev, calendar: false }));
     } catch (error) {
       console.error('Error loading overview data:', error);
-      setLoading(prev => ({ ...prev, weather: false, calendar: false }));
+      setLoading(prev => ({ ...prev, weather: false, forecast: false, calendar: false }));
     }
   }, [units]);
 
-  const loadForecastData = useCallback(async () => {
-    setLoading(prev => ({ ...prev, forecast: true }));
-    try {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            try {
-              const forecast = await ApiService.weather.getWeatherForecast(
-                position.coords.latitude,
-                position.coords.longitude,
-                units
-              );
-              setForecastData(forecast);
-            } catch (error) {
-              console.error('Error loading forecast:', error);
-            } finally {
-              setLoading(prev => ({ ...prev, forecast: false }));
-            }
-          },
-          (error) => {
-            console.error('Error getting location for forecast:', error);
-            setLoading(prev => ({ ...prev, forecast: false }));
-          }
-        );
-      } else {
-        console.error('Geolocation is not supported by this browser.');
-        setLoading(prev => ({ ...prev, forecast: false }));
-      }
-    } catch (error) {
-      console.error('Error loading forecast data:', error);
-      setLoading(prev => ({ ...prev, forecast: false }));
-    }
-  }, [units]);
 
   // Get today's events count
   const getTodaysEventsCount = () => {
@@ -129,6 +130,37 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // Get pressure with proper unit
   const getPressureDisplay = (pressure: number) => {
     return `${pressure} ${units === 'imperial' ? 'inHg' : 'hPa'}`;
+  };
+
+  // Helper function to determine if it's day or night based on current time
+  const isDayTime = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    // Consider day time from 6 AM to 8 PM (6:00 - 20:00)
+    // This gives a more realistic day/night transition
+    return hour >= 6 && hour < 20;
+  };
+
+  // Helper function to get appropriate weather icon based on condition and time
+  const getWeatherIcon = (condition: string, isDay: boolean = true) => {
+    const cond = condition.toLowerCase();
+    
+    if (cond.includes('sunny') || cond.includes('clear')) {
+      return isDay ? '☀️' : '🌙';
+    } else if (cond.includes('cloudy') || cond.includes('overcast')) {
+      return isDay ? '☁️' : '☁️'; // Same for day/night
+    } else if (cond.includes('rain') || cond.includes('drizzle')) {
+      return isDay ? '🌧️' : '🌧️'; // Same for day/night
+    } else if (cond.includes('storm') || cond.includes('thunder')) {
+      return isDay ? '⛈️' : '⛈️'; // Same for day/night
+    } else if (cond.includes('snow')) {
+      return isDay ? '🌨️' : '🌨️'; // Same for day/night
+    } else if (cond.includes('fog') || cond.includes('mist')) {
+      return isDay ? '🌫️' : '🌫️'; // Same for day/night
+    } else {
+      // Default to partly cloudy
+      return isDay ? '🌤️' : '☁️';
+    }
   };
 
   const loadCalendarData = async () => {
@@ -174,34 +206,26 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   // Reload weather data when units change
   useEffect(() => {
-    if (weatherData) {
-      loadOverviewData();
-    }
-    if (forecastData) {
-      loadForecastData();
-    }
-  }, [units, weatherData, forecastData, loadOverviewData, loadForecastData]);
+    loadOverviewData();
+  }, [units, loadOverviewData]);
 
   // Load data when tabs change
   useEffect(() => {
-    if (activeTab === 'calendar') {
-      loadCalendarData();
-    } else if (activeTab === 'weather') {
-      loadForecastData();
-    } else if (activeTab === 'recommendations') {
+    if (activeTab === 'recommendations') {
       loadRecommendations();
     }
-  }, [activeTab, loadForecastData]);
+    // Weather tab doesn't need to load data - it's already loaded in overview
+    // Calendar tab is placeholder for now
+  }, [activeTab, loadRecommendations]);
 
   // Load data when switching tabs
   const handleTabChange = (tabId: 'overview' | 'calendar' | 'weather' | 'recommendations' | 'profile') => {
     setActiveTab(tabId);
     
-    if (tabId === 'calendar' && calendarEvents.length === 0) {
-      loadCalendarData();
-    } else if (tabId === 'recommendations' && recommendations.length === 0) {
+    if (tabId === 'recommendations' && recommendations.length === 0) {
       loadRecommendations();
     }
+    // Calendar tab is placeholder for now
   };
 
   const handleLogout = async () => {
@@ -433,9 +457,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="text-6xl" role="img" aria-label={`${weatherData.condition} weather`}>
-                      {weatherData.condition.toLowerCase().includes('sunny') ? '☀️' : 
-                       weatherData.condition.toLowerCase().includes('cloudy') ? '☁️' :
-                       weatherData.condition.toLowerCase().includes('rain') ? '🌧️' : '🌤️'}
+                      {getWeatherIcon(weatherData.condition, isDayTime())}
                     </div>
                     <div>
                       <p className="text-3xl font-bold text-gray-900">{getTemperatureDisplay(weatherData.temperature)}</p>
@@ -491,81 +513,20 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {activeTab === 'calendar' && (
-          <div className="space-y-6">
-            <CalendarSync onSyncComplete={(result) => {
-              if (result.success && result.events) {
-                setCalendarEvents(result.events);
-              }
-            }} />
-            
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Calendar Events</h3>
-            {loading.calendar ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-3 text-gray-600">Loading calendar events...</span>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+            <div className="text-center">
+              <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Calendar Integration</h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                Google Calendar integration is coming soon! This will allow you to sync your calendar events 
+                with weather data for personalized recommendations.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-lg mx-auto">
+                <div className="flex items-center justify-center space-x-2 text-blue-800">
+                  <div className="animate-pulse w-2 h-2 bg-blue-600 rounded-full"></div>
+                  <span className="text-sm font-medium">Feature in development</span>
+                </div>
               </div>
-            ) : calendarEvents.length > 0 ? (
-              <div className="space-y-4">
-                {calendarEvents.map((event) => {
-                  const startTime = new Date(event.start);
-                  const endTime = new Date(event.end);
-                  const isAllDay = event.allDay;
-                  const isToday = startTime.toDateString() === new Date().toDateString();
-                  
-                  return (
-                    <div key={event.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="font-medium text-gray-900">{event.title}</h4>
-                            {isToday && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Today
-                              </span>
-                            )}
-                          </div>
-                          {event.description && (
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{event.description}</p>
-                          )}
-                          {event.location && (
-                            <p className="text-sm text-gray-500 mt-1 flex items-center">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {event.location}
-                            </p>
-                          )}
-                          {event.attendees && event.attendees.length > 0 && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              {event.attendees.length} attendee{event.attendees.length !== 1 ? 's' : ''}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right text-sm text-gray-500 ml-4">
-                          <p className="font-medium">{startTime.toLocaleDateString()}</p>
-                          {isAllDay ? (
-                            <p className="text-xs">All day</p>
-                          ) : (
-                            <p>{startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h4 className="text-lg font-medium text-gray-900 mb-2">No Calendar Connected</h4>
-                <p className="text-gray-600 mb-4">Connect your calendar to see weather recommendations for your events.</p>
-                <button 
-                  onClick={loadCalendarData}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Load Calendar Events
-                </button>
-              </div>
-            )}
             </div>
           </div>
         )}
@@ -607,21 +568,40 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div>
                 <p className="text-gray-600 mb-6">{forecastData.location}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {forecastData.days.map((day, index) => (
+                  {forecastData.days.map((day, index) => {
+                    // Create date objects for comparison and display
+                    const dayDate = new Date(day.date + 'T00:00:00'); // Force local midnight
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Set to start of today
+                    
+                    // Compare dates by their date strings (YYYY-MM-DD format)
+                    const dayDateStr = dayDate.toISOString().split('T')[0];
+                    const todayDateStr = today.toISOString().split('T')[0];
+                    const isToday = dayDateStr === todayDateStr;
+                    
+                    console.log(`Day ${index}:`, {
+                      dayDate: dayDate.toDateString(),
+                      today: today.toDateString(),
+                      dayDateStr,
+                      todayDateStr,
+                      isToday,
+                      dayName: day.dayName,
+                      date: day.date
+                    });
+                    
+                    return (
                     <div key={day.date} className="bg-gray-50 rounded-lg p-4 text-center">
                       <h4 className="font-medium text-gray-900 mb-1">
-                        {index === 0 ? 'Today' : day.dayName}
+                        {isToday ? 'Today' : day.dayName}
                       </h4>
                       <p className="text-xs text-gray-500 mb-2">
-                        {new Date(day.date).toLocaleDateString('en-US', { 
+                        {dayDate.toLocaleDateString('en-US', { 
                           month: 'short', 
                           day: 'numeric' 
                         })}
                       </p>
                       <div className="text-3xl mb-2" role="img" aria-label={`${day.condition} weather`}>
-                        {day.condition.toLowerCase().includes('sunny') || day.condition.toLowerCase().includes('clear') ? '☀️' : 
-                         day.condition.toLowerCase().includes('cloudy') ? '☁️' :
-                         day.condition.toLowerCase().includes('rain') ? '🌧️' : '🌤️'}
+                        {getWeatherIcon(day.condition, true)}
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{day.condition}</p>
                       <div className="text-lg font-semibold text-gray-900 mb-1">
@@ -637,7 +617,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                         <div>🌧️ {day.precipitation}%</div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -748,7 +729,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                     <div>
                       <p className="font-medium text-gray-900">Current Sign-in Method</p>
                       <p className="text-sm text-gray-600">
-                        {user.provider === 'google' ? 'Google Account' : 'Microsoft Account'}
+                        Google Account
                       </p>
                     </div>
                   </div>
@@ -778,12 +759,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                       <div className="p-2 bg-purple-100 rounded-lg">
                         <User className="h-5 w-5 text-purple-600" />
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Microsoft</p>
-                        <p className="text-sm text-gray-600">
-                          {isProviderLinked('microsoft.com') ? 'Connected' : 'Available'}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -793,10 +768,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <div className="flex items-start">
                   <Cloud className="h-5 w-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
                   <div>
-                    <h4 className="text-sm font-medium text-blue-800 mb-2">Sign-in Options</h4>
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">Sign-in Method</h4>
                     <p className="text-sm text-blue-700">
-                      You can sign out and sign in with either Google or Microsoft. However, 
-                      Firebase doesn&apos;t allow linking accounts that use the same email address with different providers.
+                      You&apos;re signed in with Google. This allows seamless integration with your Google Calendar 
+                      and provides secure authentication for your weather service.
                     </p>
                   </div>
                 </div>
