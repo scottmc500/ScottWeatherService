@@ -5,7 +5,7 @@ runtime: nodejs22
 build:
   commands:
     - echo "Installing dependencies..."
-    - npm ci --only=production
+    - npm install --only=production
     - echo "Building Next.js application..."
     - npm run build
   
