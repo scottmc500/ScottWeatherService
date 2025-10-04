@@ -3,10 +3,9 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { UserProfile, AuthService } from '@/services/auth';
-import { ApiService, WeatherData, CalendarEvent, Recommendation } from '@/services/weatherApi';
-import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, CloudRain, Wind, Droplets, Eye, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ApiService, WeatherData, CalendarEvent, Recommendation, ForecastData } from '@/services/weatherApi';
+import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, Wind, Droplets, Eye, CheckCircle, AlertTriangle, Gauge } from 'lucide-react';
 import CalendarSync from './CalendarSync';
-import FunctionsTest from './FunctionsTest';
 
 interface DashboardProps {
   user: UserProfile;
@@ -25,10 +24,13 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     provider: user.provider
   });
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [forecastData, setForecastData] = useState<ForecastData | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [units, setUnits] = useState<'imperial' | 'metric'>('imperial');
   const [loading, setLoading] = useState({
     weather: false,
+    forecast: false,
     calendar: false,
     recommendations: false
   });
@@ -38,10 +40,22 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     loadOverviewData();
   }, []);
 
+  // Reload weather data when units change
+  useEffect(() => {
+    if (weatherData) {
+      loadOverviewData();
+    }
+    if (forecastData) {
+      loadForecastData();
+    }
+  }, [units]);
+
   // Load data when tabs change
   useEffect(() => {
     if (activeTab === 'calendar') {
       loadCalendarData();
+    } else if (activeTab === 'weather') {
+      loadForecastData();
     } else if (activeTab === 'recommendations') {
       loadRecommendations();
     }
@@ -57,7 +71,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             try {
               const weather = await ApiService.weather.getCurrentWeather(
                 position.coords.latitude,
-                position.coords.longitude
+                position.coords.longitude,
+                units
               );
               setWeatherData(weather);
             } catch (error) {
@@ -85,12 +100,61 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     }
   };
 
+  const loadForecastData = async () => {
+    setLoading(prev => ({ ...prev, forecast: true }));
+    try {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const forecast = await ApiService.weather.getWeatherForecast(
+                position.coords.latitude,
+                position.coords.longitude,
+                units
+              );
+              setForecastData(forecast);
+            } catch (error) {
+              console.error('Error loading forecast:', error);
+            } finally {
+              setLoading(prev => ({ ...prev, forecast: false }));
+            }
+          },
+          (error) => {
+            console.error('Error getting location for forecast:', error);
+            setLoading(prev => ({ ...prev, forecast: false }));
+          }
+        );
+      } else {
+        console.error('Geolocation is not supported by this browser.');
+        setLoading(prev => ({ ...prev, forecast: false }));
+      }
+    } catch (error) {
+      console.error('Error loading forecast data:', error);
+      setLoading(prev => ({ ...prev, forecast: false }));
+    }
+  };
+
   // Get today's events count
   const getTodaysEventsCount = () => {
     const today = new Date().toDateString();
     return calendarEvents.filter(event => 
       new Date(event.start).toDateString() === today
     ).length;
+  };
+
+  // Get temperature with proper unit symbol
+  const getTemperatureDisplay = (temp: number) => {
+    return `${temp}°${units === 'imperial' ? 'F' : 'C'}`;
+  };
+
+  // Get wind speed with proper unit
+  const getWindSpeedDisplay = (speed: number) => {
+    return `${speed} ${units === 'imperial' ? 'mph' : 'm/s'}`;
+  };
+
+  // Get pressure with proper unit
+  const getPressureDisplay = (pressure: number) => {
+    return `${pressure} ${units === 'imperial' ? 'inHg' : 'hPa'}`;
   };
 
   const loadCalendarData = async () => {
@@ -298,21 +362,24 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   </div>
                   <div className="ml-4">
                     <p className="text-2xl font-bold text-gray-900">
-                      {loading.weather ? '...' : weatherData ? `${weatherData.temperature}°F` : '--°F'}
+                      {loading.weather ? '...' : weatherData ? getTemperatureDisplay(weatherData.temperature) : `--°${units === 'imperial' ? 'F' : 'C'}`}
                     </p>
                     <p className="text-sm text-gray-600">Current Temp</p>
                   </div>
                 </div>
               </div>
 
+
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CloudRain className="h-6 w-6 text-green-600" />
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Droplets className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-gray-900">10%</p>
-                    <p className="text-sm text-gray-600">Rain Chance</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {loading.weather ? '...' : weatherData ? `${weatherData.humidity}%` : '--%'}
+                    </p>
+                    <p className="text-sm text-gray-600">Humidity</p>
                   </div>
                 </div>
               </div>
@@ -332,7 +399,31 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
             {/* Today's Weather */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Today&apos;s Weather</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Today&apos;s Weather</h3>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setUnits('imperial')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      units === 'imperial' 
+                        ? 'bg-white text-gray-900 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    °F
+                  </button>
+                  <button
+                    onClick={() => setUnits('metric')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      units === 'metric' 
+                        ? 'bg-white text-gray-900 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    °C
+                  </button>
+                </div>
+              </div>
               {loading.weather ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -347,19 +438,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                        weatherData.condition.toLowerCase().includes('rain') ? '🌧️' : '🌤️'}
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-gray-900">{weatherData.temperature}°F</p>
+                      <p className="text-3xl font-bold text-gray-900">{getTemperatureDisplay(weatherData.temperature)}</p>
                       <p className="text-gray-600">{weatherData.condition}</p>
-                      <p className="text-sm text-gray-500">Feels like {weatherData.feelsLike}°F</p>
+                      <p className="text-sm text-gray-500">Feels like {getTemperatureDisplay(weatherData.feelsLike)}</p>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="flex items-center text-sm text-gray-600 mb-1">
                       <Wind className="h-4 w-4 mr-1" />
-                      {weatherData.windSpeed} mph {weatherData.windDirection}
+                      {getWindSpeedDisplay(weatherData.windSpeed)} {weatherData.windDirection}
                     </div>
                     <div className="flex items-center text-sm text-gray-600 mb-1">
-                      <Droplets className="h-4 w-4 mr-1" />
-                      Humidity: {weatherData.humidity}%
+                      <Gauge className="h-4 w-4 mr-1" />
+                      Pressure: {getPressureDisplay(weatherData.pressure)}
                     </div>
                     <div className="flex items-center text-sm text-gray-600">
                       <Eye className="h-4 w-4 mr-1" />
@@ -374,8 +465,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               )}
             </div>
 
-            {/* Functions Test */}
-            <FunctionsTest />
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -483,12 +572,81 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
         {activeTab === 'weather' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Weather Forecast</h3>
-            <div className="text-center py-12">
-              <Sun className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h4 className="text-lg font-medium text-gray-900 mb-2">Weather Service Coming Soon</h4>
-              <p className="text-gray-600">Detailed weather information and forecasts will be available here.</p>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">5-Day Weather Forecast</h3>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setUnits('imperial')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    units === 'imperial' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  °F
+                </button>
+                <button
+                  onClick={() => setUnits('metric')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    units === 'metric' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  °C
+                </button>
+              </div>
             </div>
+            
+            {loading.forecast ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading forecast...</span>
+              </div>
+            ) : forecastData ? (
+              <div>
+                <p className="text-gray-600 mb-6">{forecastData.location}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  {forecastData.days.map((day, index) => (
+                    <div key={day.date} className="bg-gray-50 rounded-lg p-4 text-center">
+                      <h4 className="font-medium text-gray-900 mb-1">
+                        {index === 0 ? 'Today' : day.dayName}
+                      </h4>
+                      <p className="text-xs text-gray-500 mb-2">
+                        {new Date(day.date).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                      <div className="text-3xl mb-2" role="img" aria-label={`${day.condition} weather`}>
+                        {day.condition.toLowerCase().includes('sunny') || day.condition.toLowerCase().includes('clear') ? '☀️' : 
+                         day.condition.toLowerCase().includes('cloudy') ? '☁️' :
+                         day.condition.toLowerCase().includes('rain') ? '🌧️' : '🌤️'}
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">{day.condition}</p>
+                      <div className="text-lg font-semibold text-gray-900 mb-1">
+                        {getTemperatureDisplay(day.highTemp)}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {getTemperatureDisplay(day.lowTemp)}
+                      </div>
+                      <div className="mt-3 space-y-1 text-xs text-gray-500">
+                        <div>🌫️ {day.humidity}%</div>
+                        <div>💨 {getWindSpeedDisplay(day.windSpeed)} {day.windDirection}</div>
+                        <div>🌡️ {getPressureDisplay(day.pressure)}</div>
+                        <div>🌧️ {day.precipitation}%</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Sun className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h4 className="text-lg font-medium text-gray-900 mb-2">Unable to load forecast</h4>
+                <p className="text-gray-600">Please check your location permissions and try again.</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -29,7 +29,7 @@ help: ## Show this help message
 start: ## Start development mode with Next.js dev server and emulators
 	@echo "🚀 Starting development mode..."
 	@echo "🔥 Starting Firebase emulators in background..."
-	@nohup firebase emulators:start --only firestore > firebase-emulators.log 2>&1 &
+	@nohup firebase emulators:start --only firestore,functions > firebase-emulators.log 2>&1 &
 	@sleep 3
 	@echo "⚡ Starting Next.js development server..."
 	@nohup npm run dev --prefix frontend > nextjs-dev.log 2>&1 &

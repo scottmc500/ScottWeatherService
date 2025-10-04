@@ -1,10 +1,9 @@
 // Weather API service - Updated to use Firebase Functions
 import { auth } from '@/lib/firebase';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 import { GoogleCalendarOAuthService } from './googleCalendarOAuth';
 
-// Initialize Firebase Functions
-const functions = getFunctions();
 
 // Types
 export interface WeatherData {
@@ -14,6 +13,7 @@ export interface WeatherData {
   humidity: number;
   windSpeed: number;
   windDirection: string;
+  pressure: number;
   uvIndex: number;
   feelsLike: number;
   timestamp: string;
@@ -31,6 +31,25 @@ export interface ForecastDay {
 export interface WeatherForecast {
   location: string;
   forecast: ForecastDay[];
+}
+
+export interface ForecastDay {
+  date: string;
+  dayName: string;
+  highTemp: number;
+  lowTemp: number;
+  condition: string;
+  icon: string;
+  humidity: number;
+  windSpeed: number;
+  windDirection: string;
+  pressure: number;
+  precipitation: number;
+}
+
+export interface ForecastData {
+  location: string;
+  days: ForecastDay[];
 }
 
 export interface CalendarEvent {
@@ -114,7 +133,8 @@ export class WeatherApiService {
         condition: weatherData.condition,
         humidity: weatherData.humidity,
         windSpeed: weatherData.windSpeed,
-        windDirection: 'N/A', // Not provided by OpenWeatherMap basic API
+        windDirection: weatherData.windDirection || 'N/A', // Use actual wind direction from API
+        pressure: weatherData.pressure || 0, // Atmospheric pressure in hPa
         uvIndex: 0, // Not provided by basic API
         feelsLike: weatherData.temperature, // Approximation
         timestamp: weatherData.timestamp,
@@ -126,31 +146,22 @@ export class WeatherApiService {
   }
 
   // Get weather forecast (placeholder - would need extended weather API)
-  static async getWeatherForecast(latitude: number, longitude: number, _date?: string): Promise<WeatherForecast> {
+  static async getWeatherForecast(latitude: number, longitude: number, units: 'metric' | 'imperial' = 'metric'): Promise<ForecastData> {
     // For now, return a mock forecast based on current weather
     try {
-      const currentWeather = await this.getCurrentWeather(latitude, longitude);
+      const getWeatherForecast = httpsCallable(functions, 'getWeatherForecast');
       
-      // Mock forecast data (in a real app, you'd call a forecast API)
-      const forecast: ForecastDay[] = [];
-      for (let i = 1; i <= 5; i++) {
-        const forecastDate = new Date();
-        forecastDate.setDate(forecastDate.getDate() + i);
-        
-        forecast.push({
-          date: forecastDate.toISOString().split('T')[0],
-          high: currentWeather.temperature + Math.floor(Math.random() * 5),
-          low: currentWeather.temperature - Math.floor(Math.random() * 5),
-          condition: currentWeather.condition,
-          precipitation: Math.floor(Math.random() * 30),
-          windSpeed: currentWeather.windSpeed + Math.floor(Math.random() * 3),
-        });
+      const result = await getWeatherForecast({
+        latitude,
+        longitude,
+        units,
+      });
+
+      if (!result.data.success) {
+        throw new Error('Weather forecast function returned error');
       }
 
-      return {
-        location: currentWeather.location,
-        forecast,
-      };
+      return result.data.data;
     } catch (error) {
       console.error('Error fetching weather forecast:', error);
       throw new Error(`Weather forecast error: ${error instanceof Error ? error.message : 'Unknown error'}`);

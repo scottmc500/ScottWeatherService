@@ -19,7 +19,15 @@
       "enabled": true,
       "port": 4000
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "apphosting": {
+      "port": 3000,
+      "rootDirectory": "./frontend",
+      "startCommand": "npm run dev"
+    },
+    "functions": {
+      "port": 5001
+    }
   },
   "functions": [
     {
