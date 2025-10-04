@@ -5,6 +5,9 @@ import { AuthService, UserProfile } from '@/services/auth';
 import LoginForm from '@/components/LoginForm';
 import Dashboard from '@/components/Dashboard';
 
+// Force dynamic rendering to prevent build-time Firebase initialization
+export const dynamic = 'force-dynamic';
+
 export default function HomePage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);

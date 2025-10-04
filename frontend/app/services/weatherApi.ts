@@ -3,6 +3,25 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { GoogleCalendarOAuthService } from './googleCalendarOAuth';
 
+// Firebase Function response interfaces
+interface FirebaseFunctionResponse<T> {
+  success: boolean;
+  data: T;
+  cached?: boolean;
+}
+
+interface CalendarFunctionResponse {
+  success: boolean;
+  events: Array<{
+    id: string;
+    summary: string;
+    start: { dateTime?: string | null; date?: string | null };
+    end: { dateTime?: string | null; date?: string | null };
+    location?: string | null;
+    description?: string | null;
+  }>;
+}
+
 
 // Types
 export interface WeatherData {
@@ -119,11 +138,13 @@ export class WeatherApiService {
         units,
       });
 
-      if (!result.data.success) {
+      const response = result.data as FirebaseFunctionResponse<WeatherData>;
+      
+      if (!response || !response.success) {
         throw new Error('Weather function returned error');
       }
 
-      const weatherData = result.data.data;
+      const weatherData = response.data;
       
       // Transform Firebase Function response to our interface
       return {
@@ -156,11 +177,13 @@ export class WeatherApiService {
         units,
       });
 
-      if (!result.data.success) {
+      const response = result.data as FirebaseFunctionResponse<ForecastData>;
+      
+      if (!response || !response.success) {
         throw new Error('Weather forecast function returned error');
       }
 
-      return result.data.data;
+      return response.data;
     } catch (error) {
       console.error('Error fetching weather forecast:', error);
       throw new Error(`Weather forecast error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -180,11 +203,13 @@ export class CalendarApiService {
         maxResults,
       });
 
-      if (!result.data.success) {
+      const response = result.data as CalendarFunctionResponse;
+      
+      if (!response || !response.success) {
         throw new Error('Calendar function returned error');
       }
 
-      const events = result.data.events;
+      const events = response.events;
       
       // Transform Firebase Function response to our interface
       const formattedEvents: CalendarEvent[] = events.map((event: {

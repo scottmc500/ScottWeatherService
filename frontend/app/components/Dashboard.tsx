@@ -35,32 +35,6 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     recommendations: false
   });
 
-  // Load data when component mounts
-  useEffect(() => {
-    loadOverviewData();
-  }, [loadOverviewData]);
-
-  // Reload weather data when units change
-  useEffect(() => {
-    if (weatherData) {
-      loadOverviewData();
-    }
-    if (forecastData) {
-      loadForecastData();
-    }
-  }, [units, weatherData, forecastData, loadOverviewData, loadForecastData]);
-
-  // Load data when tabs change
-  useEffect(() => {
-    if (activeTab === 'calendar') {
-      loadCalendarData();
-    } else if (activeTab === 'weather') {
-      loadForecastData();
-    } else if (activeTab === 'recommendations') {
-      loadRecommendations();
-    }
-  }, [activeTab, loadForecastData]);
-
   const loadOverviewData = useCallback(async () => {
     setLoading(prev => ({ ...prev, weather: true, calendar: true }));
     try {
@@ -192,6 +166,32 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       setLoading(prev => ({ ...prev, recommendations: false }));
     }
   };
+
+  // Load data when component mounts
+  useEffect(() => {
+    loadOverviewData();
+  }, [loadOverviewData]);
+
+  // Reload weather data when units change
+  useEffect(() => {
+    if (weatherData) {
+      loadOverviewData();
+    }
+    if (forecastData) {
+      loadForecastData();
+    }
+  }, [units, weatherData, forecastData, loadOverviewData, loadForecastData]);
+
+  // Load data when tabs change
+  useEffect(() => {
+    if (activeTab === 'calendar') {
+      loadCalendarData();
+    } else if (activeTab === 'weather') {
+      loadForecastData();
+    } else if (activeTab === 'recommendations') {
+      loadRecommendations();
+    }
+  }, [activeTab, loadForecastData]);
 
   // Load data when switching tabs
   const handleTabChange = (tabId: 'overview' | 'calendar' | 'weather' | 'recommendations' | 'profile') => {
