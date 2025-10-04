@@ -1,5 +1,4 @@
 // Weather API service - Updated to use Firebase Functions
-import { auth } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { GoogleCalendarOAuthService } from './googleCalendarOAuth';

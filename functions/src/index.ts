@@ -55,7 +55,7 @@ async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<any 
 
   // Check Firestore cache
   try {
-    const doc = await db.collection('weather_cache').doc(cacheKey).get();
+    const doc = await db.collection("weather_cache").doc(cacheKey).get();
     if (doc.exists) {
       const cacheData = doc.data();
       if (cacheData && isCacheValid(cacheData.timestamp, ttl)) {
@@ -69,8 +69,8 @@ async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<any 
         return cacheData.data;
       }
     }
-  } catch (error) {
-    logger.warn('Firestore cache read failed:', error);
+  } catch {
+    logger.warn("Firestore cache read failed");
   }
 
   return null;
@@ -85,14 +85,14 @@ async function setCachedWeatherData(cacheKey: string, data: any, ttl: number): P
   
   // Update Firestore cache (with longer TTL for backup)
   try {
-    await db.collection('weather_cache').doc(cacheKey).set({
+    await db.collection("weather_cache").doc(cacheKey).set({
       data,
       timestamp,
       ttl: CACHE_TTL.FIRESTORE_CACHE
     });
     logger.info(`Cache set: ${cacheKey}`);
-  } catch (error) {
-    logger.warn('Firestore cache write failed:', error);
+  } catch {
+    logger.warn("Firestore cache write failed");
   }
 }
 
@@ -109,7 +109,7 @@ async function getDetailedLocation(latitude: number, longitude: number, apiKey: 
 
   try {
     // Use OpenWeatherMap's reverse geocoding API
-    const url = `http://api.openweathermap.org/geo/1.0/reverse`;
+    const url = "http://api.openweathermap.org/geo/1.0/reverse";
     const params = {
       lat: latitude,
       lon: longitude,
@@ -132,7 +132,7 @@ async function getDetailedLocation(latitude: number, longitude: number, apiKey: 
       // Add country
       parts.push(location.country);
       
-      const detailedLocation = parts.join(', ');
+      const detailedLocation = parts.join(", ");
       
       // Cache the location data
       await setCachedWeatherData(locationCacheKey, detailedLocation, CACHE_TTL.LOCATION);
@@ -141,7 +141,7 @@ async function getDetailedLocation(latitude: number, longitude: number, apiKey: 
       return detailedLocation;
     }
   } catch (error) {
-    logger.warn('Reverse geocoding failed:', error);
+    logger.warn("Reverse geocoding failed:", error);
   }
   
   // Fallback to basic location format
@@ -302,7 +302,7 @@ export const getWeatherData = onCall<WeatherRequest>(
       }
 
       // Check cache first
-      const cacheKey = getCacheKey('current', latitude, longitude, units);
+      const cacheKey = getCacheKey("current", latitude, longitude, units);
       const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.CURRENT_WEATHER);
       
       if (cachedData) {
@@ -319,7 +319,7 @@ export const getWeatherData = onCall<WeatherRequest>(
       try {
         apiKey = weatherApiKey.value().trim();
         logger.info("Using secret manager API key");
-      } catch (error) {
+      } catch {
         // Fallback to environment variable for local development
         logger.info("Secret not available, trying environment variable");
         apiKey = process.env.WEATHER_API_KEY || "";
@@ -349,7 +349,7 @@ export const getWeatherData = onCall<WeatherRequest>(
       } else {
         // Use OpenWeatherMap API
         logger.info("Calling OpenWeatherMap API with real data");
-        const url = `https://api.openweathermap.org/data/2.5/weather`;
+        const url = "https://api.openweathermap.org/data/2.5/weather";
         const params = {
           lat: latitude,
           lon: longitude,
@@ -363,14 +363,14 @@ export const getWeatherData = onCall<WeatherRequest>(
 
       // Helper function to convert wind degrees to direction
       const getWindDirection = (degrees: number): string => {
-        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
         const index = Math.round(degrees / 22.5) % 16;
         return directions[index];
       };
 
       // Convert pressure based on units
       const pressureInHPa = data.main.pressure;
-      const convertedPressure = units === 'imperial' 
+      const convertedPressure = units === "imperial" 
         ? Math.round((pressureInHPa * 0.02953) * 100) / 100 // Convert hPa to inHg
         : Math.round(pressureInHPa); // Keep hPa for metric
 
@@ -385,7 +385,7 @@ export const getWeatherData = onCall<WeatherRequest>(
         condition: data.weather[0].description,
         humidity: data.main.humidity,
         windSpeed: data.wind.speed,
-        windDirection: data.wind.deg ? getWindDirection(data.wind.deg) : 'N/A',
+        windDirection: data.wind.deg ? getWindDirection(data.wind.deg) : "N/A",
         pressure: convertedPressure,
         location: detailedLocation,
         timestamp: new Date().toISOString(),
@@ -427,7 +427,7 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       }
 
       // Check cache first
-      const cacheKey = getCacheKey('forecast', latitude, longitude, units);
+      const cacheKey = getCacheKey("forecast", latitude, longitude, units);
       const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.FORECAST);
       
       if (cachedData) {
@@ -444,7 +444,7 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       try {
         apiKey = weatherApiKey.value();
         logger.info("Using secret manager API key for forecast");
-      } catch (error) {
+      } catch {
         // Fallback to environment variable for local development
         logger.info("Secret not available, trying environment variable for forecast");
         apiKey = process.env.WEATHER_API_KEY || "";
@@ -470,7 +470,7 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       } else {
         // Use OpenWeatherMap 5-day forecast API
         logger.info("Calling OpenWeatherMap forecast API");
-        const url = `https://api.openweathermap.org/data/2.5/forecast`;
+        const url = "https://api.openweathermap.org/data/2.5/forecast";
         const params = {
           lat: latitude,
           lon: longitude,
@@ -484,7 +484,7 @@ export const getWeatherForecast = onCall<ForecastRequest>(
 
       // Helper function to convert wind degrees to direction
       const getWindDirection = (degrees: number): string => {
-        const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+        const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
         const index = Math.round(degrees / 22.5) % 16;
         return directions[index];
       };
@@ -520,13 +520,13 @@ export const getWeatherForecast = onCall<ForecastRequest>(
           
           // Convert pressure based on units
           const pressureInHPa = middayData.main.pressure;
-          const convertedPressure = units === 'imperial' 
+          const convertedPressure = units === "imperial" 
             ? Math.round((pressureInHPa * 0.02953) * 100) / 100
             : Math.round(pressureInHPa);
 
           return {
-            date: date.toISOString().split('T')[0],
-            dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+            date: date.toISOString().split("T")[0],
+            dayName: date.toLocaleDateString("en-US", { weekday: "long" }),
             highTemp,
             lowTemp,
             condition: middayData.weather[0].description,

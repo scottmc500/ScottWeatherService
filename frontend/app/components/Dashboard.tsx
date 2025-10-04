@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { UserProfile, AuthService } from '@/services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation, ForecastData } from '@/services/weatherApi';
@@ -38,7 +38,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   // Load data when component mounts
   useEffect(() => {
     loadOverviewData();
-  }, []);
+  }, [loadOverviewData]);
 
   // Reload weather data when units change
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     if (forecastData) {
       loadForecastData();
     }
-  }, [units]);
+  }, [units, weatherData, forecastData, loadOverviewData, loadForecastData]);
 
   // Load data when tabs change
   useEffect(() => {
@@ -59,9 +59,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } else if (activeTab === 'recommendations') {
       loadRecommendations();
     }
-  }, [activeTab]);
+  }, [activeTab, loadForecastData]);
 
-  const loadOverviewData = async () => {
+  const loadOverviewData = useCallback(async () => {
     setLoading(prev => ({ ...prev, weather: true, calendar: true }));
     try {
       // Get user's location for weather data
@@ -98,9 +98,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       console.error('Error loading overview data:', error);
       setLoading(prev => ({ ...prev, weather: false, calendar: false }));
     }
-  };
+  }, [units]);
 
-  const loadForecastData = async () => {
+  const loadForecastData = useCallback(async () => {
     setLoading(prev => ({ ...prev, forecast: true }));
     try {
       if (navigator.geolocation) {
@@ -132,7 +132,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       console.error('Error loading forecast data:', error);
       setLoading(prev => ({ ...prev, forecast: false }));
     }
-  };
+  }, [units]);
 
   // Get today's events count
   const getTodaysEventsCount = () => {
