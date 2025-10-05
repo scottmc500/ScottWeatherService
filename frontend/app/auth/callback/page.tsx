@@ -2,9 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
+import { GoogleCalendarOAuthService } from '@/services/googleCalendarOAuth';
 
 export default function OAuthCallback() {
   const router = useRouter();
@@ -30,34 +28,17 @@ export default function OAuthCallback() {
       try {
         console.log('🔄 Exchanging authorization code for tokens...');
         
-        // Exchange code for tokens using our API
-        const response = await fetch('/api/oauth/exchange', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ code }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Token exchange failed: ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        // Exchange code for tokens using Firebase Functions
+        const tokens = await GoogleCalendarOAuthService.exchangeCodeForTokens(code);
         
-        if (result.success) {
-          console.log('✅ Calendar access tokens received');
-          
-          // Store tokens in localStorage (simple approach that was working)
-          localStorage.setItem('googleCalendarTokens', JSON.stringify(result.tokens));
-          console.log('✅ Tokens stored in localStorage');
-          
-          // Redirect back to main app
-          router.push('/?calendar_connected=true');
-        } else {
-          console.error('❌ Token exchange failed:', result.error);
-          router.push('/?error=token_exchange_failed');
-        }
+        console.log('✅ Calendar access tokens received');
+        
+        // Store tokens in localStorage
+        GoogleCalendarOAuthService.storeTokens(tokens);
+        console.log('✅ Tokens stored in localStorage');
+        
+        // Redirect back to main app
+        router.push('/?calendar_connected=true');
 
       } catch (error) {
         console.error('❌ Error exchanging code for tokens:', error);

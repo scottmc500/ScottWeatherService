@@ -10,6 +10,16 @@ export class GoogleCalendarOAuthService {
     return `${window.location.origin}/auth/callback/`;
   }
 
+  private static getFunctionsUrl(): string {
+    if (typeof window === 'undefined') {
+      return 'http://localhost:5001/scott-weather-service/us-central1'; // fallback for SSR
+    }
+    // In production, this will be your Firebase Functions URL
+    return process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:5001/scott-weather-service/us-central1'
+      : 'https://us-central1-scott-weather-service.cloudfunctions.net';
+  }
+
   /**
    * Simple OAuth flow - just redirect to Google
    */
@@ -109,6 +119,37 @@ export class GoogleCalendarOAuthService {
 
     localStorage.removeItem('googleCalendarTokens');
     console.log('🗑️ Calendar tokens cleared');
+  }
+
+  /**
+   * Exchange OAuth code for tokens using Firebase Functions
+   */
+  static async exchangeCodeForTokens(code: string): Promise<{ access_token: string; refresh_token?: string }> {
+    try {
+      const functionsUrl = this.getFunctionsUrl();
+      const response = await fetch(`${functionsUrl}/oauthExchange`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Token exchange failed');
+      }
+
+      return data.tokens;
+    } catch (error) {
+      console.error('Error exchanging code for tokens:', error);
+      throw error;
+    }
   }
 }
 

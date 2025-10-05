@@ -1,9 +1,11 @@
 {
-  "apphosting": {
-    "scott-weather-frontend": {
-      "source": "frontend",
-      "runtime": "nodejs22"
-    }
+  "hosting": {
+    "public": "frontend/out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   },
   "firestore": {
     "database": "(default)",

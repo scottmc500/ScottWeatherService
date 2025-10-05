@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { UserProfile, AuthService } from '@/services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation, ForecastData } from '@/services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, Wind, Droplets, Eye, CheckCircle, AlertTriangle, Gauge } from 'lucide-react';
-import CalendarSync from './CalendarSync';
+// import CalendarSync from './CalendarSync'; // Removed unused import
 
 interface DashboardProps {
   user: UserProfile;
@@ -25,7 +25,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   });
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [forecastData, setForecastData] = useState<ForecastData | null>(null);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [calendarEvents] = useState<CalendarEvent[]>([]); // Removed unused setter
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [units, setUnits] = useState<'imperial' | 'metric'>('imperial');
   const [loading, setLoading] = useState({
@@ -163,31 +163,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     }
   };
 
-  const loadCalendarData = async () => {
-    setLoading(prev => ({ ...prev, calendar: true }));
-    try {
-      // Import the Google Calendar OAuth service
-      const { GoogleCalendarOAuthService } = await import('@/services/googleCalendarOAuth');
-      
-      // Check if user has Google Calendar access
-      const tokens = GoogleCalendarOAuthService.getStoredTokens();
-      
-      if (!tokens?.access_token) {
-        console.log('No Google Calendar access token found. User needs to authenticate first.');
-        setLoading(prev => ({ ...prev, calendar: false }));
-        return;
-      }
+  // Removed unused loadCalendarData function
 
-      const calendar = await ApiService.calendar.getCalendarEvents(tokens.access_token);
-      setCalendarEvents(calendar.events);
-    } catch (error) {
-      console.error('Error loading calendar:', error);
-    } finally {
-      setLoading(prev => ({ ...prev, calendar: false }));
-    }
-  };
-
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async () => {
     setLoading(prev => ({ ...prev, recommendations: true }));
     try {
       const recs = await ApiService.recommendations.getRecommendations();
@@ -197,7 +175,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } finally {
       setLoading(prev => ({ ...prev, recommendations: false }));
     }
-  };
+  }, []);
 
   // Load data when component mounts
   useEffect(() => {

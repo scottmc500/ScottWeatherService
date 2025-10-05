@@ -7,6 +7,7 @@ import axios from "axios";
 import {defineSecret} from "firebase-functions/params";
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
+import {getAuth} from "firebase-admin/auth";
 
 // Initialize Firebase Admin for Firestore caching
 initializeApp();
@@ -616,6 +617,222 @@ export const healthCheck = onRequest((request, response) => {
   response.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
-    functions: ["getCalendarEvents", "getWeatherData"],
+    functions: ["getCalendarEvents", "getWeatherData", "oauthExchange", "calendarAuth", "calendarStatus"],
   });
+});
+
+/**
+ * OAuth token exchange endpoint
+ */
+export const oauthExchange = onRequest(async (request, response) => {
+  // Set CORS headers
+  response.set('Access-Control-Allow-Origin', '*');
+  response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).send('');
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    response.status(405).json({ success: false, error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { code } = request.body;
+    
+    if (!code) {
+      response.status(400).json({ success: false, error: 'Authorization code required' });
+      return;
+    }
+
+    // Get redirect URI from environment or use default
+    const redirectUri = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000/auth/callback/'
+      : 'https://scott-weather-service.web.app/auth/callback/';
+
+    logger.info('🔍 OAuth exchange using redirect URI:', redirectUri);
+    
+    const oAuth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+
+    // Exchange code for tokens
+    const { tokens } = await oAuth2Client.getToken(code);
+    
+    if (!tokens.access_token) {
+      response.status(400).json({ success: false, error: 'No access token received' });
+      return;
+    }
+
+    // Return the tokens - frontend will store them
+    response.json({ 
+      success: true, 
+      tokens: {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        scope: tokens.scope,
+        token_type: tokens.token_type,
+        expiry_date: tokens.expiry_date
+      }
+    });
+
+  } catch (error) {
+    logger.error('Token exchange error:', error);
+    response.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+/**
+ * Calendar authentication endpoint
+ */
+export const calendarAuth = onRequest(async (request, response) => {
+  // Set CORS headers
+  response.set('Access-Control-Allow-Origin', '*');
+  response.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).send('');
+    return;
+  }
+
+  try {
+    logger.info('🔍 Calendar auth API called');
+    
+    // Get the Firebase ID token from the Authorization header
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      logger.info('❌ No Firebase token provided in Authorization header');
+      response.status(401).json({ error: 'No Firebase token provided' });
+      return;
+    }
+
+    const idToken = authHeader.replace('Bearer ', '');
+    logger.info('🔑 Firebase token received, verifying...');
+    
+    // Verify the Firebase ID token
+    const decodedToken = await getAuth().verifyIdToken(idToken);
+    const userId = decodedToken.uid;
+    logger.info('✅ Firebase token verified for user:', userId);
+    
+    if (request.method === 'POST') {
+      // Store Google Calendar token
+      const { googleToken } = request.body;
+      
+      if (!googleToken) {
+        response.status(400).json({ 
+          success: false, 
+          error: "Google OAuth token required" 
+        });
+        return;
+      }
+      
+      logger.info(`Received Google token for user ${userId}:`, {
+        hasAccessToken: !!googleToken.access_token,
+        hasRefreshToken: !!googleToken.refresh_token,
+        scope: googleToken.scope,
+        tokenType: typeof googleToken
+      });
+      
+      // Store Google Calendar token in Firestore
+      await db.collection("users").doc(userId).set({
+        googleCalendarToken: {
+          access_token: googleToken.access_token,
+          refresh_token: googleToken.refresh_token,
+          scope: googleToken.scope,
+          type: "oauth_token",
+          lastUpdated: new Date().toISOString()
+        }
+      }, { merge: true });
+      
+      logger.info(`Stored OAuth token for user ${userId}`);
+      
+      response.json({
+        success: true,
+        message: "Google Calendar OAuth token stored successfully"
+      });
+      
+    } else if (request.method === 'DELETE') {
+      // Remove Google Calendar token from Firestore
+      await db.collection("users").doc(userId).update({
+        googleCalendarToken: null
+      });
+      
+      logger.info(`Cleared OAuth token for user ${userId}`);
+      
+      response.json({
+        success: true,
+        message: "Google Calendar OAuth token cleared successfully"
+      });
+    } else {
+      response.status(405).json({ success: false, error: 'Method not allowed' });
+    }
+    
+  } catch (error) {
+    logger.error("Calendar auth error:", error);
+    response.status(500).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error" 
+    });
+  }
+});
+
+/**
+ * Calendar status check endpoint
+ */
+export const calendarStatus = onRequest(async (request, response) => {
+  // Set CORS headers
+  response.set('Access-Control-Allow-Origin', '*');
+  response.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    response.status(204).send('');
+    return;
+  }
+
+  if (request.method !== 'GET') {
+    response.status(405).json({ hasAccess: false, error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    // Get the Firebase ID token from the Authorization header
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      response.status(401).json({ hasAccess: false });
+      return;
+    }
+
+    const idToken = authHeader.replace('Bearer ', '');
+    
+    // Verify the Firebase ID token
+    const decodedToken = await getAuth().verifyIdToken(idToken);
+    const userId = decodedToken.uid;
+    
+    // Check Firestore for stored tokens
+    const userDoc = await db.collection("users").doc(userId).get();
+    
+    if (!userDoc.exists) {
+      response.json({ hasAccess: false });
+      return;
+    }
+    
+    const userData = userDoc.data();
+    const hasAccess = !!(userData?.googleCalendarToken?.access_token);
+    
+    response.json({ hasAccess });
+    
+  } catch (error) {
+    logger.error("Calendar status check error:", error);
+    response.status(500).json({ hasAccess: false });
+  }
 });

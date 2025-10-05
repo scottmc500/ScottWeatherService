@@ -2,9 +2,11 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
-  // Firebase App Hosting supports full Next.js with SSR and API routes
-  // No need for static export - use full Next.js capabilities
+  // Enable static export for Firebase Hosting
+  output: 'export',
+  trailingSlash: true,
   images: {
+    unoptimized: true, // Required for static export
     remotePatterns: [
       {
         protocol: 'https',
@@ -14,8 +16,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // External packages for server components
-  serverExternalPackages: ['@google-cloud/firestore'],
+  // Remove server-side features for static export
+  // serverExternalPackages: ['@google-cloud/firestore'], // Not needed for static
   // Ensure path aliases work in production builds
   webpack: (config) => {
     config.resolve.alias = {
