@@ -20,7 +20,7 @@ setGlobalOptions({ maxInstances: 10 });
 const weatherApiKey = defineSecret("weather_api_key");
 
 // In-memory cache for weather data (5-10 minute cache)
-const weatherCache = new Map<string, {data: any; timestamp: number; ttl: number}>();
+const weatherCache = new Map<string, {data: WeatherData | ForecastData | string; timestamp: number; ttl: number}>();
 
 // Cache configuration - temporarily reduced for debugging
 const CACHE_TTL = {
@@ -46,7 +46,7 @@ function isCacheValid(timestamp: number, ttl: number): boolean {
 }
 
 // Helper function to get cached data
-async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<any | null> {
+async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<WeatherData | ForecastData | string | null> {
   // Check in-memory cache first
   const memoryCache = weatherCache.get(cacheKey);
   if (memoryCache && isCacheValid(memoryCache.timestamp, memoryCache.ttl)) {
@@ -78,7 +78,7 @@ async function getCachedWeatherData(cacheKey: string, ttl: number): Promise<any 
 }
 
 // Helper function to set cached data
-async function setCachedWeatherData(cacheKey: string, data: any, ttl: number): Promise<void> {
+async function setCachedWeatherData(cacheKey: string, data: WeatherData | ForecastData | string, ttl: number): Promise<void> {
   const timestamp = Date.now();
   
   // Update memory cache
@@ -105,7 +105,7 @@ async function getDetailedLocation(latitude: number, longitude: number, apiKey: 
   
   if (cachedLocation) {
     logger.info(`Cache hit (location): ${locationCacheKey}`);
-    return cachedLocation;
+    return cachedLocation as string;
   }
 
   try {
@@ -162,6 +162,53 @@ interface CalendarRequest {
   timeMax?: string;
   maxResults?: number;
 }
+
+// OpenWeatherMap API response types
+interface OpenWeatherMain {
+  temp: number;
+  temp_min: number;
+  temp_max: number;
+  humidity: number;
+  pressure: number;
+}
+
+interface OpenWeatherWeather {
+  description: string;
+  icon: string;
+}
+
+interface OpenWeatherWind {
+  speed: number;
+  deg: number;
+}
+
+interface OpenWeatherCurrentResponse {
+  main: OpenWeatherMain;
+  weather: OpenWeatherWeather[];
+  wind: OpenWeatherWind;
+  name: string;
+  sys: {
+    country: string;
+  };
+}
+
+interface OpenWeatherForecastItem {
+  dt: number;
+  main: OpenWeatherMain;
+  weather: OpenWeatherWeather[];
+  wind: OpenWeatherWind;
+  pop: number;
+}
+
+interface OpenWeatherForecastResponse {
+  city: {
+    name: string;
+    country: string;
+    timezone: number;
+  };
+  list: OpenWeatherForecastItem[];
+}
+
 
 interface WeatherRequest {
   latitude: number;
@@ -240,7 +287,14 @@ export const getCalendarEvents = onCall<CalendarRequest>(
       const calendar = google.calendar({version: "v3", auth});
 
       // Prepare parameters
-      const params: any = {
+      const params: {
+        calendarId: string;
+        maxResults: number;
+        singleEvents: boolean;
+        orderBy: string;
+        timeMin?: string;
+        timeMax?: string;
+      } = {
         calendarId,
         maxResults,
         singleEvents: true,
@@ -307,10 +361,10 @@ export const getWeatherData = onCall<WeatherRequest>(
       const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.CURRENT_WEATHER);
       
       if (cachedData) {
-        logger.info(`Returning cached weather data for ${cachedData.location}`);
+        logger.info(`Returning cached weather data for ${(cachedData as WeatherData).location}`);
         return {
           success: true,
-          data: cachedData,
+          data: cachedData as WeatherData,
           cached: true,
         };
       }
@@ -326,7 +380,7 @@ export const getWeatherData = onCall<WeatherRequest>(
         apiKey = process.env.WEATHER_API_KEY || "";
       }
       
-      let data: any;
+      let data: OpenWeatherCurrentResponse;
       
       if (!apiKey) {
         // Return mock data for local development/testing
@@ -334,13 +388,18 @@ export const getWeatherData = onCall<WeatherRequest>(
         data = {
           main: {
             temp: 22,
-            humidity: 65
+            temp_min: 18,
+            temp_max: 25,
+            humidity: 65,
+            pressure: 1013
           },
           weather: [{
-            description: "sunny"
+            description: "sunny",
+            icon: "01d"
           }],
           wind: {
-            speed: 3.2
+            speed: 3.2,
+            deg: 180
           },
           name: "San Francisco",
           sys: {
@@ -432,10 +491,10 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       const cachedData = await getCachedWeatherData(cacheKey, CACHE_TTL.FORECAST);
       
       if (cachedData) {
-        logger.info(`Returning cached forecast data for ${cachedData.location}`);
+        logger.info(`Returning cached forecast data for ${(cachedData as ForecastData).location}`);
         return {
           success: true,
-          data: cachedData,
+          data: cachedData as ForecastData,
           cached: true,
         };
       }
@@ -451,7 +510,7 @@ export const getWeatherForecast = onCall<ForecastRequest>(
         apiKey = process.env.WEATHER_API_KEY || "";
       }
       
-      let data: any;
+      let data: OpenWeatherForecastResponse;
       
       if (!apiKey) {
         // Return mock data for local development/testing
@@ -511,9 +570,9 @@ export const getWeatherForecast = onCall<ForecastRequest>(
       };
 
       // Group forecast data by day and find high/low temps
-      const dailyData: { [key: string]: any[] } = {};
+      const dailyData: { [key: string]: OpenWeatherForecastItem[] } = {};
       
-      data.list.forEach((item: any) => {
+      data.list.forEach((item: OpenWeatherForecastItem) => {
         // Use the timezone offset from the API response to get correct local date
         const timezoneOffset = data.city.timezone || 0; // timezone offset in seconds
         const localTime = new Date((item.dt + timezoneOffset) * 1000);
@@ -538,12 +597,12 @@ export const getWeatherForecast = onCall<ForecastRequest>(
           const dayData = dailyData[dateStr];
           
           // Find high and low temps for the day
-          const temps = dayData.map((item: any) => item.main.temp);
+          const temps = dayData.map((item: OpenWeatherForecastItem) => item.main.temp);
           const highTemp = Math.round(Math.max(...temps));
           const lowTemp = Math.round(Math.min(...temps));
           
           // Use midday data (around 12pm) for condition and other details
-          const middayData = dayData.find((item: any) => {
+          const middayData = dayData.find((item: OpenWeatherForecastItem) => {
             const hour = new Date(item.dt * 1000).getHours();
             return hour >= 10 && hour <= 14;
           }) || dayData[Math.floor(dayData.length / 2)];
@@ -626,17 +685,17 @@ export const healthCheck = onRequest((request, response) => {
  */
 export const oauthExchange = onRequest(async (request, response) => {
   // Set CORS headers
-  response.set('Access-Control-Allow-Origin', '*');
-  response.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.set("Access-Control-Allow-Origin", "*");
+  response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (request.method === 'OPTIONS') {
-    response.status(204).send('');
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
     return;
   }
 
-  if (request.method !== 'POST') {
-    response.status(405).json({ success: false, error: 'Method not allowed' });
+  if (request.method !== "POST") {
+    response.status(405).json({ success: false, error: "Method not allowed" });
     return;
   }
 
@@ -644,16 +703,16 @@ export const oauthExchange = onRequest(async (request, response) => {
     const { code } = request.body;
     
     if (!code) {
-      response.status(400).json({ success: false, error: 'Authorization code required' });
+      response.status(400).json({ success: false, error: "Authorization code required" });
       return;
     }
 
     // Get redirect URI from environment or use default
-    const redirectUri = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:3000/auth/callback/'
-      : 'https://scott-weather-service.web.app/auth/callback/';
+    const redirectUri = process.env.NODE_ENV === "development" 
+      ? "http://localhost:3000/auth/callback/"
+      : "https://scott-weather-service.web.app/auth/callback/";
 
-    logger.info('🔍 OAuth exchange using redirect URI:', redirectUri);
+    logger.info("🔍 OAuth exchange using redirect URI:", redirectUri);
     
     const oAuth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -665,7 +724,7 @@ export const oauthExchange = onRequest(async (request, response) => {
     const { tokens } = await oAuth2Client.getToken(code);
     
     if (!tokens.access_token) {
-      response.status(400).json({ success: false, error: 'No access token received' });
+      response.status(400).json({ success: false, error: "No access token received" });
       return;
     }
 
@@ -682,10 +741,10 @@ export const oauthExchange = onRequest(async (request, response) => {
     });
 
   } catch (error) {
-    logger.error('Token exchange error:', error);
+    logger.error("Token exchange error:", error);
     response.status(500).json({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: error instanceof Error ? error.message : "Unknown error" 
     });
   }
 });
@@ -695,35 +754,35 @@ export const oauthExchange = onRequest(async (request, response) => {
  */
 export const calendarAuth = onRequest(async (request, response) => {
   // Set CORS headers
-  response.set('Access-Control-Allow-Origin', '*');
-  response.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.set("Access-Control-Allow-Origin", "*");
+  response.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (request.method === 'OPTIONS') {
-    response.status(204).send('');
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
     return;
   }
 
   try {
-    logger.info('🔍 Calendar auth API called');
+    logger.info("🔍 Calendar auth API called");
     
     // Get the Firebase ID token from the Authorization header
     const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      logger.info('❌ No Firebase token provided in Authorization header');
-      response.status(401).json({ error: 'No Firebase token provided' });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      logger.info("❌ No Firebase token provided in Authorization header");
+      response.status(401).json({ error: "No Firebase token provided" });
       return;
     }
 
-    const idToken = authHeader.replace('Bearer ', '');
-    logger.info('🔑 Firebase token received, verifying...');
+    const idToken = authHeader.replace("Bearer ", "");
+    logger.info("🔑 Firebase token received, verifying...");
     
     // Verify the Firebase ID token
     const decodedToken = await getAuth().verifyIdToken(idToken);
     const userId = decodedToken.uid;
-    logger.info('✅ Firebase token verified for user:', userId);
+    logger.info("✅ Firebase token verified for user:", userId);
     
-    if (request.method === 'POST') {
+    if (request.method === "POST") {
       // Store Google Calendar token
       const { googleToken } = request.body;
       
@@ -760,7 +819,7 @@ export const calendarAuth = onRequest(async (request, response) => {
         message: "Google Calendar OAuth token stored successfully"
       });
       
-    } else if (request.method === 'DELETE') {
+    } else if (request.method === "DELETE") {
       // Remove Google Calendar token from Firestore
       await db.collection("users").doc(userId).update({
         googleCalendarToken: null
@@ -773,7 +832,7 @@ export const calendarAuth = onRequest(async (request, response) => {
         message: "Google Calendar OAuth token cleared successfully"
       });
     } else {
-      response.status(405).json({ success: false, error: 'Method not allowed' });
+      response.status(405).json({ success: false, error: "Method not allowed" });
     }
     
   } catch (error) {
@@ -790,29 +849,29 @@ export const calendarAuth = onRequest(async (request, response) => {
  */
 export const calendarStatus = onRequest(async (request, response) => {
   // Set CORS headers
-  response.set('Access-Control-Allow-Origin', '*');
-  response.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  response.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.set("Access-Control-Allow-Origin", "*");
+  response.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (request.method === 'OPTIONS') {
-    response.status(204).send('');
+  if (request.method === "OPTIONS") {
+    response.status(204).send("");
     return;
   }
 
-  if (request.method !== 'GET') {
-    response.status(405).json({ hasAccess: false, error: 'Method not allowed' });
+  if (request.method !== "GET") {
+    response.status(405).json({ hasAccess: false, error: "Method not allowed" });
     return;
   }
 
   try {
     // Get the Firebase ID token from the Authorization header
     const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       response.status(401).json({ hasAccess: false });
       return;
     }
 
-    const idToken = authHeader.replace('Bearer ', '');
+    const idToken = authHeader.replace("Bearer ", "");
     
     // Verify the Firebase ID token
     const decodedToken = await getAuth().verifyIdToken(idToken);
