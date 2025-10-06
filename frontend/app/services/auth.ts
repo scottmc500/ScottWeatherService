@@ -9,6 +9,8 @@ import {
 import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
+// Simplified - using Firebase Functions for calendar access instead of direct gapi
+
 // Initialize Google provider (Firebase Auth only - no calendar scopes)
 const googleProvider = new GoogleAuthProvider();
 // Note: Calendar scopes are handled separately via Google OAuth flow
@@ -29,6 +31,7 @@ export interface UserProfile {
 }
 
 export class AuthService {
+  // Simplified AuthService - using Firebase Functions for calendar access
 
   // Sign in with Google (Firebase best practice)
   static async signInWithGoogle(): Promise<UserProfile> {
@@ -44,9 +47,6 @@ export class AuthService {
         photoURL: user.photoURL
       });
       
-      // Firebase Auth is for authentication only - calendar tokens handled separately
-      console.log('✅ Firebase Auth completed - user authenticated');
-      
       // Check if this is a new user or existing user
       let userProfile: UserProfile;
       if (additionalInfo?.isNewUser) {
@@ -58,9 +58,6 @@ export class AuthService {
         userProfile = await this.getUserProfile(user.uid) || await this.saveUserProfile(user, 'google');
         console.log('👤 Existing user profile loaded');
       }
-
-      // Profile data comes from Firebase Auth - no additional API calls needed
-      console.log('👤 User profile ready with Firebase Auth data');
       
       return userProfile;
     } catch (error: unknown) {
@@ -75,12 +72,32 @@ export class AuthService {
     }
   }
 
+  // Connect Google Calendar access (separate from Firebase Auth)
+  static async connectGoogleCalendar(): Promise<void> {
+    try {
+      // Get current Firebase user
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        throw new Error('Must be signed in to connect Google Calendar');
+      }
+
+      // Use the existing OAuth flow from GoogleCalendarOAuthService
+      const { GoogleCalendarOAuthService } = await import('./googleCalendarOAuth');
+      await GoogleCalendarOAuthService.requestCalendarAccess();
+      
+    } catch (error) {
+      console.error('❌ Error connecting Google Calendar:', error);
+      throw error;
+    }
+  }
+
 
 
   // Sign out
   static async signOut(): Promise<void> {
     try {
       await signOut(auth);
+      console.log('✅ User signed out');
     } catch (error) {
       console.error('Sign-out error:', error);
       throw error;
@@ -237,9 +254,10 @@ export class AuthService {
         googleCalendarToken: tokenData
       }, { merge: true });
       
-      console.log(`Stored Google Calendar tokens for user ${userId}`);
+      console.log(`✅ Stored Google Calendar tokens for user ${userId}`);
     } catch (error) {
       console.error('Error storing Google Calendar tokens:', error);
+      throw error;
     }
   }
 

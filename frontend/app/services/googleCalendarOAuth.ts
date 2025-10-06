@@ -10,15 +10,7 @@ export class GoogleCalendarOAuthService {
     return `${window.location.origin}/auth/callback/`;
   }
 
-  private static getFunctionsUrl(): string {
-    if (typeof window === 'undefined') {
-      return 'http://localhost:5001/scott-weather-service/us-central1'; // fallback for SSR
-    }
-    // In production, this will be your Firebase Functions URL
-    return process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:5001/scott-weather-service/us-central1'
-      : 'https://us-central1-scott-weather-service.cloudfunctions.net';
-  }
+  // Removed direct HTTP calls - using Firebase Functions SDK instead
 
   /**
    * Simple OAuth flow - just redirect to Google
@@ -126,20 +118,24 @@ export class GoogleCalendarOAuthService {
    */
   static async exchangeCodeForTokens(code: string): Promise<{ access_token: string; refresh_token?: string }> {
     try {
-      const functionsUrl = this.getFunctionsUrl();
-      const response = await fetch(`${functionsUrl}/oauthExchange`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      // Use Firebase Functions SDK instead of direct HTTP calls
+      const { functions } = await import('@/lib/firebase');
+      const { httpsCallable } = await import('firebase/functions');
+      
+      const oauthExchange = httpsCallable(functions, 'oauthExchange');
+      const result = await oauthExchange({ code });
+      
+      const data = result.data as { 
+        success: boolean; 
+        tokens: { 
+          access_token: string; 
+          refresh_token?: string; 
+          scope?: string; 
+          token_type?: string; 
+          expiry_date?: number; 
+        }; 
+        error?: string; 
+      };
       
       if (!data.success) {
         throw new Error(data.error || 'Token exchange failed');

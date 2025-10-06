@@ -169,7 +169,7 @@ export class WeatherApiService {
   static async getWeatherForecast(latitude: number, longitude: number, units: 'metric' | 'imperial' = 'metric'): Promise<ForecastData> {
     // For now, return a mock forecast based on current weather
     try {
-      const getWeatherForecast = httpsCallable(functions, 'getWeatherForecast');
+      const getWeatherForecast = httpsCallable(functions, 'getWeatherForecastFunction');
       
       const result = await getWeatherForecast({
         latitude,
