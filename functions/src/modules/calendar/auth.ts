@@ -1,9 +1,7 @@
 // Calendar authentication logic
-
-import { google } from "googleapis";
 import * as logger from "firebase-functions/logger";
-import { db, auth } from "../../config";
-import { CalendarEventsRequest, CalendarEventsResponse, CalendarEvent } from "../../types";
+import { db } from "../../config";
+import { CalendarEventsRequest, CalendarEventsResponse } from "../../types";
 import { getCalendarEventsWithToken } from "./events";
 
 // Get calendar events with automatic token retrieval from Firestore

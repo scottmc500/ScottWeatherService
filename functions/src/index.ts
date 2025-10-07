@@ -8,7 +8,7 @@ import { google } from "googleapis";
 import * as logger from "firebase-functions/logger";
 
 // Import configuration
-import { weatherApiKey, googleClientId, googleClientSecret, auth, db } from "./config";
+import { weatherApiKey, googleClientId, googleClientSecret, auth } from "./config";
 
 // Import types
 import { CalendarRequest, CalendarEventsRequest } from "./types";

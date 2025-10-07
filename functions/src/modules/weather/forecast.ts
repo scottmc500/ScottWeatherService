@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import * as logger from "firebase-functions/logger";
-import { ForecastRequest, ForecastData, ForecastResponse, OpenWeatherForecastResponse, ForecastDay } from "../../types";
+import { ForecastRequest, ForecastData, ForecastResponse, OpenWeatherForecastResponse, OpenWeatherForecastItem, ForecastDay } from "../../types";
 import { getCacheKey, getCachedWeatherData, setCachedWeatherData } from "../shared/cache";
 import { getDetailedLocation } from "../shared/location";
 import { CACHE_TTL, weatherApiKey } from "../../config";
@@ -100,9 +100,9 @@ export async function getWeatherForecast(request: ForecastRequest): Promise<Fore
     }
 
     // Group forecast data by day and find high/low temps
-    const dailyData: { [key: string]: any[] } = {};
+    const dailyData: { [key: string]: OpenWeatherForecastItem[] } = {};
     
-    data.list.forEach((item: any) => {
+    data.list.forEach((item: OpenWeatherForecastItem) => {
       // Use the timezone offset from the API response to get correct local date
       const timezoneOffset = data.city.timezone || 0; // timezone offset in seconds
       const localTime = new Date((item.dt + timezoneOffset) * 1000);
@@ -127,12 +127,12 @@ export async function getWeatherForecast(request: ForecastRequest): Promise<Fore
         const dayData = dailyData[dateStr];
         
         // Find high and low temps for the day
-        const temps = dayData.map((item: any) => item.main.temp);
+        const temps = dayData.map((item: OpenWeatherForecastItem) => item.main.temp);
         const highTemp = Math.round(Math.max(...temps));
         const lowTemp = Math.round(Math.min(...temps));
         
         // Use midday data (around 12pm) for condition and other details
-        const middayData = dayData.find((item: any) => {
+        const middayData = dayData.find((item: OpenWeatherForecastItem) => {
           const hour = new Date(item.dt * 1000).getHours();
           return hour >= 10 && hour <= 14;
         }) || dayData[Math.floor(dayData.length / 2)];

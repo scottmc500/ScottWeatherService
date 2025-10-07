@@ -10,11 +10,11 @@ export interface UserProfile {
   lastLogin: Date;
   preferences: {
     timezone?: string;
-    units?: 'metric' | 'imperial';
+    units?: "metric" | "imperial";
     notifications?: boolean;
   };
 }
 
 // Re-export specific types
-export * from './calendar';
-export * from './weather';
+export * from "./calendar";
+export * from "./weather";
