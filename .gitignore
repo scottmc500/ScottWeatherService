@@ -85,20 +85,11 @@ frontend/coverage/
 # =============================================================================
 
 # Never commit these!
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-backend/.env
-backend/.env.local
-frontend/.env
-frontend/.env.local
+**/.env
+**/.env.*
 
 # But DO keep examples
-!.env.example
-!backend/.env.example
-!frontend/.env.local.example
+!**/.env.example
 
 # =============================================================================
 # Docker
