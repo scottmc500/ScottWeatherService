@@ -194,46 +194,20 @@ export const calendarAuth = onRequest(async (request, response) => {
 });
 
 /**
- * Calendar status check endpoint
+ * Calendar status check function (callable)
  */
-export const calendarStatus = onRequest(async (request, response) => {
-  // Set CORS headers
-  response.set("Access-Control-Allow-Origin", "*");
-  response.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (request.method === "OPTIONS") {
-    response.status(204).send("");
-    return;
-  }
-
-  if (request.method !== "GET") {
-    response.status(405).json({ hasAccess: false, error: "Method not allowed" });
-    return;
-  }
-
-  try {
-    // Get the Firebase ID token from the Authorization header
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      response.status(401).json({ hasAccess: false });
-      return;
+export const calendarStatus = onCall(
+  { cors: true },
+  async (request) => {
+    const userId = request.auth?.uid;
+    if (!userId) {
+      throw new Error("User must be authenticated");
     }
-
-    const idToken = authHeader.replace("Bearer ", "");
-    
-    // Verify the Firebase ID token
-    const decodedToken = await auth.verifyIdToken(idToken);
-    const userId = decodedToken.uid;
     
     const hasAccess = await checkCalendarAccess(userId);
-    response.json({ hasAccess });
-    
-  } catch (error) {
-    logger.error("Calendar status check error:", error);
-    response.status(500).json({ hasAccess: false });
+    return { hasAccess };
   }
-});
+);
 
 // ============================================================================
 // WEATHER FUNCTIONS

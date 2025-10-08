@@ -141,7 +141,29 @@ export class GoogleCalendarOAuthService {
         throw new Error(data.error || 'Token exchange failed');
       }
 
-      return data.tokens;
+      // Store tokens in both localStorage and Firestore
+      const tokens = data.tokens;
+      this.storeTokens(tokens);
+      
+      // Also store in Firestore if user is authenticated
+      const { auth } = await import('@/lib/firebase');
+      const { AuthService } = await import('./auth');
+      
+      if (auth.currentUser) {
+        try {
+          await AuthService.storeGoogleCalendarTokens(auth.currentUser.uid, {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            scope: tokens.scope || 'https://www.googleapis.com/auth/calendar.readonly',
+          });
+          console.log('✅ Tokens synced to Firestore');
+        } catch (error) {
+          console.warn('⚠️ Failed to sync tokens to Firestore:', error);
+          // Don't throw - localStorage storage is sufficient for now
+        }
+      }
+
+      return tokens;
     } catch (error) {
       console.error('Error exchanging code for tokens:', error);
       throw error;

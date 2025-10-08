@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CalendarApiService, CalendarSyncResult } from '@/services/weatherApi';
+import { CalendarSyncResult } from '@/services/weatherApi';
 import { GoogleCalendarOAuthService } from '@/services/googleCalendarOAuth';
+import { CalendarSyncService } from '@/services/calendarSync';
 import { CheckCircle, Loader2, Calendar } from 'lucide-react';
 
 interface CalendarSyncProps {
@@ -17,12 +18,11 @@ export default function CalendarSync({ onSyncComplete }: CalendarSyncProps) {
 
   // Check if user has Google Calendar access
   useEffect(() => {
-    const checkCalendarAccess = () => {
+    const checkCalendarAccess = async () => {
       try {
-        // Check if user has calendar tokens stored in localStorage
-        const hasAccess = GoogleCalendarOAuthService.hasCalendarAccess();
+        const hasAccess = await CalendarSyncService.checkCalendarAccess();
         setHasCalendarAccess(hasAccess);
-        console.log('Google Calendar access:', hasAccess);
+        console.log('Google Calendar access (via Firebase):', hasAccess);
       } catch (error) {
         console.error('Error checking calendar access:', error);
         setHasCalendarAccess(false);
@@ -40,11 +40,16 @@ export default function CalendarSync({ onSyncComplete }: CalendarSyncProps) {
     try {
       // Check if user has Google Calendar access
       if (!hasCalendarAccess) {
-        throw new Error('Please sign in with Google to access your calendar');
+        throw new Error('Please connect your Google Calendar first');
       }
 
-      // Sync the calendar (tokens are already stored from Firebase auth)
-      const result = await CalendarApiService.syncCalendarEvents();
+      // Use the new CalendarSyncService to sync events
+      const result = await CalendarSyncService.syncCalendarEvents({
+        timeMin: new Date().toISOString(),
+        timeMax: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
+        maxResults: 50,
+      });
+      
       setSyncResult(result);
       
       if (result.success) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Calendar, CalendarCheck, CalendarX } from 'lucide-react';
+import { CalendarSyncService } from '@/services/calendarSync';
 
 interface CalendarEvent {
   id: string;
@@ -22,14 +23,8 @@ export default function CalendarIntegration() {
     // Check if user has calendar access via Firebase Functions
     const checkCalendarAccess = async () => {
       try {
-        const { functions } = await import('@/lib/firebase');
-        const { httpsCallable } = await import('firebase/functions');
-        
-        const calendarStatus = httpsCallable(functions, 'calendarStatus');
-        const result = await calendarStatus();
-        const data = result.data as { hasAccess: boolean };
-        
-        setHasCalendarAccess(data.hasAccess);
+        const hasAccess = await CalendarSyncService.checkCalendarAccess();
+        setHasCalendarAccess(hasAccess);
       } catch (error) {
         console.error('❌ Failed to check calendar access:', error);
         setHasCalendarAccess(false);
@@ -63,25 +58,28 @@ export default function CalendarIntegration() {
     setError(null);
     
     try {
-      // Use the new Firebase Function with automatic token retrieval
-      const { functions } = await import('@/lib/firebase');
-      const { httpsCallable } = await import('firebase/functions');
-      
-      const getCalendarEventsWithAuth = httpsCallable(functions, 'getCalendarEventsWithAuthFunction');
-      
-      const result = await getCalendarEventsWithAuth({
+      // Use the new CalendarSyncService to load events
+      const result = await CalendarSyncService.syncCalendarEvents({
         timeMin: new Date().toISOString(),
         timeMax: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
         maxResults: 10,
       });
       
-      const data = result.data as { success: boolean; events: CalendarEvent[]; count: number };
-      
-      if (data.success) {
-        setCalendarEvents(data.events);
-        console.log('✅ Calendar events loaded via Firebase Functions:', data.count, 'events');
+      if (result.success && result.events) {
+        // Transform events to match the CalendarEvent interface
+        const events: CalendarEvent[] = result.events.map(event => ({
+          id: event.id,
+          summary: event.title,
+          start: { dateTime: event.start },
+          end: { dateTime: event.end },
+          location: event.location,
+          description: event.description,
+        }));
+        
+        setCalendarEvents(events);
+        console.log('✅ Calendar events loaded via CalendarSyncService:', result.total, 'events');
       } else {
-        throw new Error('Failed to retrieve calendar events');
+        throw new Error(result.error || 'Failed to retrieve calendar events');
       }
     } catch (error) {
       console.error('❌ Failed to load calendar events:', error);

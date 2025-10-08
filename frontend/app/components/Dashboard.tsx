@@ -5,7 +5,10 @@ import Image from 'next/image';
 import { UserProfile, AuthService } from '@/services/auth';
 import { ApiService, WeatherData, CalendarEvent, Recommendation, ForecastData } from '@/services/weatherApi';
 import { LogOut, User, Calendar, Cloud, Settings, Bell, MapPin, Sun, Wind, Droplets, Eye, CheckCircle, AlertTriangle, Gauge } from 'lucide-react';
-// import CalendarSync from './CalendarSync'; // Removed unused import
+import CalendarIntegration from './CalendarIntegration';
+import CalendarSync from './CalendarSync';
+import CalendarTest from './CalendarTest';
+import FirebaseDebug from './FirebaseDebug';
 
 interface DashboardProps {
   user: UserProfile;
@@ -491,21 +494,18 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {activeTab === 'calendar' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
-            <div className="text-center">
-              <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-6" />
-              <h3 className="text-2xl font-semibold text-gray-900 mb-4">Calendar Integration</h3>
-              <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                Google Calendar integration is coming soon! This will allow you to sync your calendar events 
-                with weather data for personalized recommendations.
-              </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-lg mx-auto">
-                <div className="flex items-center justify-center space-x-2 text-blue-800">
-                  <div className="animate-pulse w-2 h-2 bg-blue-600 rounded-full"></div>
-                  <span className="text-sm font-medium">Feature in development</span>
-                </div>
-              </div>
-            </div>
+          <div className="space-y-6">
+            {/* Firebase Debug - Add this first to debug issues */}
+            <FirebaseDebug />
+            
+            {/* Calendar Integration */}
+            <CalendarIntegration />
+            
+            {/* Calendar Sync */}
+            <CalendarSync />
+            
+            {/* Calendar Test */}
+            <CalendarTest />
           </div>
         )}
 
