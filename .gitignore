@@ -1,40 +1,148 @@
+# =============================================================================
+# Scott Weather Service - Comprehensive .gitignore
+# =============================================================================
+
+# =============================================================================
+# Go Backend
+# =============================================================================
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/bin/
+backend/dist/
+backend/weather-service
+backend/main
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# =============================================================================
+# Frontend (Next.js / React)
+# =============================================================================
+
 # Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Package managers
-.pnpm-debug.log*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+frontend/node_modules/
 .pnp
-.pnp.*
+.pnp.js
 
 # Next.js
 .next/
 out/
 build/
 dist/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
 
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+frontend/next-env.d.ts
 
-# Environment variables
-.env*
+# Production builds
+frontend/build/
 
 # Testing
 coverage/
 .nyc_output
+frontend/coverage/
 
+# Misc
+.DS_Store
+*.pem
+
+# ESLint cache
+.eslintcache
+
+# Vercel
+.vercel
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Turbo
+.turbo
+
+# =============================================================================
+# Environment Variables & Secrets
+# =============================================================================
+
+# Never commit these!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+
+# But DO keep examples
+!.env.example
+!backend/.env.example
+!frontend/.env.local.example
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+# Docker volumes (if using local volumes)
+.docker/
+docker-volumes/
+
+# Docker Compose overrides
+docker-compose.override.yml
+
+# =============================================================================
+# Kubernetes
+# =============================================================================
+
+# Don't commit actual secrets (template is OK)
+k8s/secret.yaml
+!k8s/secret.yaml.template
+
+# Helm charts (if you add them later)
+*.tgz
+k8s/charts/
+
+# =============================================================================
+# Database & Cache
+# =============================================================================
+
+# PostgreSQL
+*.sql
+*.dump
+*.backup
+pgdata/
+postgres-data/
+
+# Redis
+dump.rdb
+redis-data/
+
+# =============================================================================
 # Logs
-logs
+# =============================================================================
+
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -42,69 +150,160 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Firebase
-.firebase/
-firebase-debug.log
-firebase-debug.*.log
-firestore-debug.log
-firebase-emulators.log
+# =============================================================================
+# IDE & Editors
+# =============================================================================
 
-# Firebase Functions
-functions/lib/
-functions/node_modules/
-functions/*.local
-
-# Vercel
-.vercel
-
-# IDE
+# VSCode
 .vscode/
+*.code-workspace
+
+# IntelliJ / GoLand / WebStorm
 .idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
 *.swp
 *.swo
 *~
+.vim/
 
-# OS
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# Operating System
+# =============================================================================
+
+# macOS
 .DS_Store
 .DS_Store?
 ._*
+.AppleDouble
+.LSOverride
 .Spotlight-V100
 .Trashes
-ehthumbs.db
-Thumbs.db
 
-# Temporary files
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# =============================================================================
+# Temporary Files
+# =============================================================================
+
 tmp/
 temp/
 *.tmp
 *.temp
+*.bak
+*.backup
+*.swp
 
-# Build artifacts
-*.tgz
-*.tar.gz
+# =============================================================================
+# Package Managers
+# =============================================================================
 
-# ESLint cache
-.eslintcache
-
-# Optional npm cache directory
+# npm
 .npm
+.npmrc
+package-lock.json.bak
 
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
+# Yarn
 .yarn-integrity
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.yarnrc.yml
 
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
+# pnpm
+.pnpm-debug.log*
+pnpm-lock.yaml.bak
 
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
+# =============================================================================
+# Build Artifacts
+# =============================================================================
 
-# Temporary folders
+*.tar.gz
+*.zip
+*.rar
+
+# =============================================================================
+# Testing & Coverage
+# =============================================================================
+
+.nyc_output/
+coverage/
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+# Keep READMEs but ignore generated docs
+# docs/_build/
+# docs/.doctrees/
+
+# =============================================================================
+# Misc
+# =============================================================================
+
+# Terraform (if you add it later)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Cloud provider configs
+.aws/
+.gcloud/
+
+# Certificate files (never commit these!)
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_dsa.pub
+
+# GPG keys
+*.gpg
+secring.*
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+
+# Remove old Firebase function artifacts if they exist
+functions/
+
+# Air (Go live reload) temp files
 tmp/
-temp/
+**/.air/
