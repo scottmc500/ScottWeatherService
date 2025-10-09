@@ -119,6 +119,22 @@ func registerRoutes(
 	router.GET("/health/ready", healthHandler.Ready)
 	router.GET("/health/live", healthHandler.Live)
 
+	// Routes listing endpoint
+	router.GET("/routes", func(c *gin.Context) {
+		routes := router.Routes()
+		routeList := make([]map[string]string, 0)
+		for _, route := range routes {
+			routeList = append(routeList, map[string]string{
+				"method": route.Method,
+				"path":   route.Path,
+			})
+		}
+		c.JSON(200, gin.H{
+			"total":  len(routeList),
+			"routes": routeList,
+		})
+	})
+
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
@@ -167,4 +183,3 @@ func registerRoutes(
 		}
 	}
 }
-

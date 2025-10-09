@@ -39,7 +39,7 @@ func NewPostgresDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 
 func RunMigrations(db *gorm.DB) error {
 	log.Println("Running database migrations...")
-	
+
 	err := db.AutoMigrate(
 		&model.User{},
 		&model.CalendarToken{},
@@ -51,4 +51,3 @@ func RunMigrations(db *gorm.DB) error {
 	log.Println("Database migrations completed successfully")
 	return nil
 }
-
